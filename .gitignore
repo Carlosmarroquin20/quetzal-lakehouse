@@ -1,0 +1,10 @@
+# Local configuration and secrets. Only the .env.example template is tracked.
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
