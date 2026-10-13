@@ -3,6 +3,11 @@
 .env.*
 !.env.example
 
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+
 # Editor and OS files
 .vscode/
 .idea/
