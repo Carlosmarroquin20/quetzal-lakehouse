@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "Jobs that land public Guatemalan data in the bronze layer of the lakehouse."
 requires-python = ">=3.13"
 dependencies = [
+    "boto3>=1.43.113",
     "defusedxml>=0.7.1",
     "httpx>=0.28.1",
+    "pyarrow>=26.0.0",
+    "tzdata>=2026.5",
 ]
 
 [build-system]
