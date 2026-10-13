@@ -1,0 +1,32 @@
+name: quetzal-lakehouse
+
+services:
+  storage:
+    # S3-compatible object store for local development. The rest of the
+    # project only depends on the S3 API, so in AWS this service is replaced
+    # by S3 itself with no code changes.
+    # The tag is pinned because the image's all-in-one defaults (ports,
+    # bundled components) may change between releases.
+    image: chrislusf/seaweedfs:4.48
+    environment:
+      # Mapped from project-specific names so that real AWS credentials
+      # exported in the host shell are never picked up by accident.
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
+      # Created on first start; on later starts this is a no-op.
+      S3_BUCKET: ${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env}
+    ports:
+      # Published on loopback only: reachable from this machine, not the LAN.
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      # Unauthenticated liveness endpoint of the S3 gateway.
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8333/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  storage-data:
