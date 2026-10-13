@@ -1,0 +1,4 @@
+# Store and check out text files with LF line endings on every OS.
+# Everything in this repository runs inside Linux containers, where CRLF
+# breaks shell scripts and shows up as noise in diffs.
+* text=auto eol=lf
