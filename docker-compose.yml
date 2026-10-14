@@ -1,5 +1,34 @@
 name: quetzal-lakehouse
 
+x-airflow: &airflow
+  image: apache/airflow:3.3.2
+  profiles: ["airflow"]
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:?set AIRFLOW_DB_USER in .env}:${AIRFLOW_DB_PASSWORD:?set AIRFLOW_DB_PASSWORD in .env}@airflow-db/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?set AIRFLOW_FERNET_KEY in .env}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:?set AIRFLOW_JWT_SECRET in .env}
+    AIRFLOW__API__SECRET_KEY: ${AIRFLOW_API_SECRET_KEY:?set AIRFLOW_API_SECRET_KEY in .env}
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: America/Guatemala
+    # Local development only: the interface is open without a login. It is
+    # published on loopback, so only this machine can reach it.
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    # What the tasks pass on to the containers they start.
+    S3_REGION: ${S3_REGION:?set S3_REGION in .env}
+    S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
+    S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
+    S3_BUCKET_BRONZE: ${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env}
+    S3_BUCKET_SILVER: ${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env}
+    S3_BUCKET_GOLD: ${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env}
+    # The Docker daemon resolves bind mounts on the host, so the landing
+    # folder has to be given as a host path.
+    PROJECT_HOST_DIR: ${PROJECT_HOST_DIR:?set PROJECT_HOST_DIR in .env}
+  volumes:
+    - ./orchestration/dags:/opt/airflow/dags:ro
+    - airflow-logs:/opt/airflow/logs
+
 services:
   storage:
     # S3-compatible object store for local development. The rest of the
@@ -32,8 +61,10 @@ services:
   ingestion:
     # Jobs, not a long-running service. The profile keeps `docker compose up`
     # from starting it; run one with `docker compose run --rm ingestion <job>`,
-    # for example `exchange-rates`.
+    # for example `exchange-rates`. The image name is fixed because Airflow
+    # starts the same image for its tasks.
     build: ./ingestion
+    image: quetzal-lakehouse-ingestion
     profiles: ["jobs"]
     environment:
       # Inside the Compose network the store is reached by its service name.
@@ -54,6 +85,7 @@ services:
     # dbt job. Without arguments it runs `dbt build`; anything after the
     # service name replaces that, e.g. `docker compose run --rm transform test`.
     build: ./transform
+    image: quetzal-lakehouse-transform
     profiles: ["jobs"]
     environment: &dbt-environment
       S3_ENDPOINT_URL: http://storage:8333
@@ -76,6 +108,7 @@ services:
     # dbt documentation site with the lineage graph, at http://localhost:8080.
     # It describes what the last transform run built, so run that job first.
     build: ./transform
+    image: quetzal-lakehouse-transform
     profiles: ["docs"]
     entrypoint: ["sh", "-c"]
     command: ["dbt docs generate && exec dbt docs serve --host 0.0.0.0 --port 8080 --no-browser"]
@@ -88,6 +121,68 @@ services:
       storage:
         condition: service_healthy
 
+  # Airflow runs the pipeline every day. It only schedules: each task starts
+  # the ingestion or transform image as a container, through the Docker
+  # socket. Start it with `docker compose --profile airflow up -d`.
+  airflow-db:
+    image: postgres:17.7-alpine
+    profiles: ["airflow"]
+    environment:
+      POSTGRES_USER: ${AIRFLOW_DB_USER:?set AIRFLOW_DB_USER in .env}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:?set AIRFLOW_DB_PASSWORD in .env}
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${AIRFLOW_DB_USER}", "-d", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    # Creates or upgrades Airflow's own tables, then exits.
+    <<: *airflow
+    command: ["airflow", "db", "migrate"]
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+
+  airflow-apiserver:
+    # Web interface and API, at http://localhost:8081.
+    <<: *airflow
+    command: ["airflow", "api-server"]
+    ports:
+      - "127.0.0.1:8081:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/api/v2/version"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on: &after-init
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow
+    command: ["airflow", "dag-processor"]
+    depends_on: *after-init
+
+  airflow-scheduler:
+    # With the local executor, tasks run inside the scheduler, so this is the
+    # container that talks to Docker.
+    <<: *airflow
+    command: ["airflow", "scheduler"]
+    volumes:
+      - ./orchestration/dags:/opt/airflow/dags:ro
+      - airflow-logs:/opt/airflow/logs
+      # Control over Docker on this machine. Acceptable for local development;
+      # it is what lets a task start a container.
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on: *after-init
+
 volumes:
   storage-data:
   transform-state:
+  airflow-db-data:
+  airflow-logs:
