@@ -13,10 +13,14 @@ ENV UV_COMPILE_BYTECODE=1 \
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
-# dbt writes its artifacts and the scratch database next to the project, so
-# the directory has to belong to the user the job runs as.
-RUN useradd --create-home transform && chown transform /app
+# dbt writes its artifacts next to the project, so the directory has to belong
+# to the user the job runs as. The scratch database goes in its own directory
+# so that Compose can keep it in a volume between runs.
+RUN useradd --create-home transform \
+    && mkdir /app/state \
+    && chown transform /app /app/state
 USER transform
+ENV DBT_DUCKDB_PATH=/app/state/quetzal.duckdb
 
 # The DuckDB extension and the dbt packages are downloaded here, at build
 # time, so that a run does not depend on those downloads.

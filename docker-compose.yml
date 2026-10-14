@@ -50,7 +50,7 @@ services:
     # service name replaces that, e.g. `docker compose run --rm transform test`.
     build: ./transform
     profiles: ["jobs"]
-    environment:
+    environment: &dbt-environment
       S3_ENDPOINT_URL: http://storage:8333
       S3_REGION: ${S3_REGION:?set S3_REGION in .env}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
@@ -58,9 +58,31 @@ services:
       S3_BUCKET_BRONZE: ${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env}
       S3_BUCKET_SILVER: ${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env}
       S3_BUCKET_GOLD: ${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env}
+    volumes:
+      # DuckDB scratch database: views over the Parquet files and the seeds.
+      # Kept between runs so that separate dbt commands see each other's
+      # results. It holds no data of its own and can be deleted at any time.
+      - transform-state:/app/state
+    depends_on:
+      storage:
+        condition: service_healthy
+
+  docs:
+    # dbt documentation site with the lineage graph, at http://localhost:8080.
+    # It describes what the last transform run built, so run that job first.
+    build: ./transform
+    profiles: ["docs"]
+    entrypoint: ["sh", "-c"]
+    command: ["dbt docs generate && exec dbt docs serve --host 0.0.0.0 --port 8080 --no-browser"]
+    environment: *dbt-environment
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - transform-state:/app/state
     depends_on:
       storage:
         condition: service_healthy
 
 volumes:
   storage-data:
+  transform-state:
