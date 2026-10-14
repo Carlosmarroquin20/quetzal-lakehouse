@@ -19,4 +19,4 @@ RUN useradd --create-home ingestion
 USER ingestion
 ENV PATH="/app/.venv/bin:$PATH"
 
-ENTRYPOINT ["python", "-m", "quetzal_ingestion.exchange_rates"]
+ENTRYPOINT ["python", "-m", "quetzal_ingestion"]

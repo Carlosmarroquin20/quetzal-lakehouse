@@ -30,8 +30,9 @@ services:
       start_period: 15s
 
   ingestion:
-    # A job, not a long-running service. The profile keeps `docker compose up`
-    # from starting it; run it with `docker compose run --rm ingestion`.
+    # Jobs, not a long-running service. The profile keeps `docker compose up`
+    # from starting it; run one with `docker compose run --rm ingestion <job>`,
+    # for example `exchange-rates`.
     build: ./ingestion
     profiles: ["jobs"]
     environment:
