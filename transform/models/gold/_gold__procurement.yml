@@ -46,24 +46,35 @@ models:
   - name: dim_supplier
     description: >
       Suppliers awarded at least one process, one row per supplier, with the
-      most recent name the source gives it. Most suppliers are natural
-      persons: for them supplier_id and supplier_name are personal data.
+      most recent name the source gives it. Natural persons are not
+      identified here: their tax number and name are replaced, and so are
+      those of suppliers whose legal type is unknown. Silver keeps the
+      original values for those allowed to see them.
+    config:
+      meta:
+        personal_data: masked
+    data_tests:
+      - dbt_utils.expression_is_true:
+          name: masked_suppliers_show_no_identity
+          arguments:
+            expression: "not is_masked or (supplier_id is null and supplier_name in ('Natural person', 'Supplier of unknown legal type'))"
     columns:
       - name: supplier_key
-        description: Surrogate key, a hash of supplier_id.
+        description: >
+          Surrogate key, a keyed hash (HMAC-SHA256) of the supplier's
+          identifier. Without the key it cannot be computed from a tax
+          number, so it does not reveal who the supplier is.
         data_tests:
           - not_null
           - unique
       - name: supplier_id
         description: >
-          Tax number of the supplier prefixed with GT-NIT, or a Guatecompras
-          number prefixed with GT-GCID. The natural key. Personal data when
-          the supplier is a natural person.
-        data_tests:
-          - not_null
-          - unique
+          Tax number prefixed with GT-NIT, or a Guatecompras number prefixed
+          with GT-GCID. Empty when the supplier is masked.
       - name: supplier_name
-        description: Name of the supplier. Personal data when the supplier is a natural person.
+        description: >
+          Name of the supplier, or "Natural person" or "Supplier of unknown
+          legal type" when it is masked.
         data_tests:
           - not_null
       - name: identifier_scheme
@@ -74,6 +85,10 @@ models:
         description: >
           True when the legal form is "INDIVIDUAL". Empty, not false, when
           the legal form is unknown.
+      - name: is_masked
+        description: True when supplier_id and supplier_name are replaced.
+        data_tests:
+          - not_null
 
   - name: dim_procurement_method
     description: >
@@ -221,3 +236,21 @@ unit_tests:
       rows:
         - {award_id: A1, award_date_key: 20260901, published_date_key: 20260831, procurement_category: goods, is_cancelled: false, awarded_amount: 770.00, awarded_amount_gtq: 770.00, awarded_amount_usd: 100.00}
         - {award_id: A2, award_date_key: 20260902, published_date_key: 20260831, procurement_category: goods, is_cancelled: true, awarded_amount: 1000.00, awarded_amount_gtq: 1000.00, awarded_amount_usd: 125.00}
+
+  - name: natural_persons_are_masked
+    description: >
+      A natural person and a supplier of unknown legal type lose their
+      identifier and name; a company keeps them. The key is not checked
+      because it depends on the secret.
+    model: dim_supplier
+    given:
+      - input: ref('stg_guatecompras__suppliers')
+        rows:
+          - {supplier_id: GT-NIT-1, supplier_name: EXAMPLE COMPANY S.A., identifier_scheme: GT-NIT, legal_type: "SOCIEDAD ANÓNIMA"}
+          - {supplier_id: GT-NIT-2, supplier_name: JANE EXAMPLE, identifier_scheme: GT-NIT, legal_type: INDIVIDUAL}
+          - {supplier_id: GT-GCID-3, supplier_name: FOREIGN EXAMPLE, identifier_scheme: GT-GCID, legal_type: null}
+    expect:
+      rows:
+        - {supplier_id: GT-NIT-1, supplier_name: EXAMPLE COMPANY S.A., is_natural_person: false, is_masked: false}
+        - {supplier_id: null, supplier_name: Natural person, is_natural_person: true, is_masked: true}
+        - {supplier_id: null, supplier_name: Supplier of unknown legal type, is_natural_person: null, is_masked: true}

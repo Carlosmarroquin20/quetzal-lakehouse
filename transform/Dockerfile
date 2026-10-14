@@ -29,6 +29,7 @@ COPY --chown=transform dbt_project.yml packages.yml package-lock.yml ./
 RUN dbt deps
 
 COPY --chown=transform profiles.yml ./
+COPY --chown=transform plugins ./plugins
 COPY --chown=transform models ./models
 COPY --chown=transform seeds ./seeds
 COPY --chown=transform tests ./tests

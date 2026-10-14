@@ -62,7 +62,8 @@ select
     described.award_date_key,
     described.published_date_key,
     {{ dbt_utils.generate_surrogate_key(['described.buyer_id']) }} as buyer_key,
-    {{ dbt_utils.generate_surrogate_key(['described.supplier_id']) }} as supplier_key,
+    -- Keyed hash, as in dim_supplier: a plain hash of a tax number can be reversed.
+    pseudonymize(described.supplier_id) as supplier_key,
     {{ dbt_utils.generate_surrogate_key(['described.procurement_method_details', 'described.procurement_method']) }} as procurement_method_key,
     {{ dbt_utils.generate_surrogate_key(['described.currency_code']) }} as currency_key,
     described.procurement_category,

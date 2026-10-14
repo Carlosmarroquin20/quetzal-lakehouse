@@ -6,6 +6,8 @@ requires-python = ">=3.13"
 dependencies = [
     "dbt-core>=1.12.5",
     "dbt-duckdb>=1.11.0",
+    "numpy>=2.5.4",
+    "pyarrow>=26.0.0",
 ]
 
 # This directory holds a dbt project, not an installable Python package.
