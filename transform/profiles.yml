@@ -7,6 +7,12 @@ quetzal_lakehouse:
       # seeds; deleting it loses nothing, because the next run rebuilds it.
       path: "{{ env_var('DBT_DUCKDB_PATH', 'quetzal.duckdb') }}"
       threads: 4
+      settings:
+        # Keep DuckDB below the memory of the container it runs in. Beyond
+        # this it spills to disk instead of being killed.
+        memory_limit: "{{ env_var('DBT_DUCKDB_MEMORY_LIMIT', '3GB') }}"
+        # Lets large scans stream instead of buffering rows to keep their order.
+        preserve_insertion_order: false
       extensions:
         - httpfs
       secrets:

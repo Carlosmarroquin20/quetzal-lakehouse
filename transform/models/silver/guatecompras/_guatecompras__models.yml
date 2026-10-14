@@ -1,0 +1,270 @@
+version: 2
+
+models:
+  - name: stg_guatecompras__processes
+    description: >
+      Contracting processes published in Guatecompras, one row per process,
+      with the current state the source reports. A process is a tender and
+      whatever followed it: bids, awards, contracts. The source repeats a few
+      processes; the most recently updated copy is kept. Of the organisations
+      and people named in a process, only the buyer is described here.
+    data_tests:
+      - dbt_utils.expression_is_true:
+          name: process_status_is_missing_only_when_not_awarded
+          description: >
+            The source leaves the status empty on a few processes, all of
+            them detailed as "No adjudicado". An empty status anywhere else
+            is new.
+          arguments:
+            expression: "status is not null or status_details = 'No adjudicado'"
+    columns:
+      - name: ocid
+        description: Open contracting identifier of the process. Primary key.
+        data_tests:
+          - not_null
+          - unique
+      - name: tender_id
+        description: Identifier of the tender, built from its Guatecompras operation number (NOG).
+        data_tests:
+          - not_null
+          - unique
+      - name: title
+        description: Title of the tender, as written by the buyer.
+      - name: status
+        description: Status of the tender in the OCDS code list.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["active", "complete", "unsuccessful", "withdrawn", "cancelled", "planning", "planned"]
+      - name: status_details
+        description: Status of the tender in the words Guatecompras uses, in Spanish.
+        data_tests:
+          - not_null
+      - name: procurement_method
+        description: Procurement method in the OCDS code list.
+        data_tests:
+          - not_null
+      - name: procurement_method_details
+        description: >
+          Procurement procedure under Guatemalan law, in Spanish, for example
+          "Licitación Pública (Art. 17 LCE)".
+        data_tests:
+          - not_null
+      - name: procurement_category
+        description: What is being bought. Empty on a small share of processes.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["goods", "services", "works"]
+      - name: published_at
+        description: Moment the tender was published.
+        data_tests:
+          - not_null
+      - name: published_date
+        description: Calendar day in Guatemala on which the tender was published.
+        data_tests:
+          - not_null
+      - name: number_of_tenderers
+        description: Number of bidders the source reports for the tender.
+      - name: buyer_id
+        description: >
+          Identifier of the buying organisation: the tax number of the public
+          body, prefixed with GT-NIT.
+        data_tests:
+          - not_null
+      - name: buyer_name
+        description: Name of the buying organisation.
+        data_tests:
+          - not_null
+      - name: entity_code
+        description: >
+          Code of the budget entity the buyer belongs to, in the
+          institutional classifier of the public sector. Several buyers can
+          share one code. Empty when the process does not list the entity.
+      - name: entity_type
+        description: Kind of public body the budget entity is, in Spanish.
+      - name: entity_sector
+        description: Sector the budget entity belongs to, in Spanish.
+      - name: purchasing_unit_id
+        description: Identifier of the purchasing unit inside the buyer.
+      - name: purchasing_unit_name
+        description: Name of the purchasing unit.
+      - name: updated_at
+        description: Moment of the last change the source reports for the process.
+        data_tests:
+          - not_null
+      - name: source_file
+        description: Object in the bronze bucket holding the original file the row came from.
+      - name: ingested_at
+        description: When the ingestion run that loaded the row started (UTC).
+
+  - name: stg_guatecompras__awards
+    description: >
+      Awards of the contracting processes, one row per award. An award gives
+      one supplier all or part of a process for an amount. Cancelled awards
+      are kept, with their status.
+    data_tests:
+      - dbt_utils.expression_is_true:
+          name: every_award_has_exactly_one_supplier
+          arguments:
+            expression: "supplier_count = 1"
+    columns:
+      - name: award_id
+        description: Identifier of the award. Primary key.
+        data_tests:
+          - not_null
+          - unique
+      - name: ocid
+        description: Process the award belongs to.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_guatecompras__processes')
+                field: ocid
+      - name: status
+        description: Status of the award in the OCDS code list.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["pending", "active", "cancelled", "unsuccessful"]
+      - name: status_details
+        description: Status of the award in the words Guatecompras uses, in Spanish.
+      - name: awarded_at
+        description: Moment the award was made.
+        data_tests:
+          - not_null
+      - name: awarded_date
+        description: Calendar day in Guatemala on which the award was made.
+        data_tests:
+          - not_null
+      - name: amount
+        description: Amount awarded, in the currency of currency_code.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: currency_code
+        description: ISO 4217 code of the currency of the amount.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('currencies')
+                field: currency_code
+      - name: supplier_id
+        description: Supplier that received the award.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_guatecompras__suppliers')
+                field: supplier_id
+      - name: supplier_count
+        description: Number of suppliers the source lists for the award.
+      - name: source_file
+        description: Object in the bronze bucket holding the original file the row came from.
+      - name: ingested_at
+        description: When the ingestion run that loaded the row started (UTC).
+
+  - name: stg_guatecompras__suppliers
+    description: >
+      Suppliers that have been awarded at least one process, one row per
+      supplier, with the most recent name the source gives them. Most
+      suppliers are natural persons, so supplier_id and supplier_name are
+      personal data. Contact details are deliberately not brought here.
+    columns:
+      - name: supplier_id
+        description: >
+          Identifier of the supplier: its tax number prefixed with GT-NIT, or
+          a Guatecompras number prefixed with GT-GCID when it has none.
+          Personal data when the supplier is a natural person.
+        data_tests:
+          - not_null
+          - unique
+      - name: supplier_name
+        description: Name of the supplier. Personal data when the supplier is a natural person.
+        data_tests:
+          - not_null
+      - name: identifier_scheme
+        description: Registry that issued the identifier.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["GT-NIT", "GT-GCID"]
+      - name: legal_type
+        description: >
+          Legal form of the supplier, in Spanish. "INDIVIDUAL" is a natural
+          person. Empty when the source does not describe the supplier.
+      - name: updated_at
+        description: Moment of the last change in a process that names the supplier.
+
+unit_tests:
+  - name: a_process_is_read_once_with_its_local_date
+    description: >
+      A process repeated in the source yields one row, and its publication
+      day is the calendar day in Guatemala even when it is already the next
+      day in UTC.
+    model: stg_guatecompras__processes
+    given:
+      - input: source('bronze_guatecompras', 'contracting_processes')
+        format: sql
+        rows: |
+          select
+              'ocds-test-1' as ocid,
+              '{"ocid":"ocds-test-1","compiledRelease":{"date":"2026-09-02T10:00:00-06:00","buyer":{"id":"GT-NIT-100","name":"Example Ministry"},"tender":{"id":"GT-NOG-1","title":"Example tender","status":"complete","statusDetails":"Adjudicado","procurementMethod":"open","procurementMethodDetails":"Example procedure","mainProcurementCategory":"goods","datePublished":"2026-08-31T23:30:00-06:00","numberOfTenderers":2},"parties":[{"id":"GT-CISP-11130099","name":"Example Ministry","identifier":{"scheme":"GT-CISP","id":"11130099"},"details":{"entityType":{"description":"Example type"},"type":{"description":"Example sector"}},"contactPoint":{"email":"someone@example.test"}},{"id":"GT-GCUC-1-2","name":"Example unit","identifier":{"scheme":"GT-GCUC","id":"1-2"}}]}}' as record,
+              'example.zip' as _source_file,
+              timestamptz '2026-10-13 12:00:00+00' as _ingested_at
+          from range(2)
+    expect:
+      rows:
+        - ocid: ocds-test-1
+          tender_id: GT-NOG-1
+          status: complete
+          procurement_category: goods
+          published_date: 2026-08-31
+          number_of_tenderers: 2
+          buyer_id: GT-NIT-100
+          buyer_name: Example Ministry
+          entity_code: "11130099"
+          purchasing_unit_id: GT-GCUC-1-2
+
+  - name: each_award_of_a_process_becomes_a_row
+    description: A process with two awards yields two rows, and one without awards yields none.
+    model: stg_guatecompras__awards
+    given:
+      - input: source('bronze_guatecompras', 'contracting_processes')
+        format: sql
+        rows: |
+          select
+              'ocds-test-1' as ocid,
+              '{"ocid":"ocds-test-1","compiledRelease":{"date":"2026-09-02T10:00:00-06:00","awards":[{"id":"GT-ADJ-1-A","status":"active","statusDetails":"Habilitado","date":"2026-09-01T23:45:00-06:00","value":{"amount":1500.5,"currency":"GTQ"},"suppliers":[{"id":"GT-NIT-A","name":"Example supplier A"}]},{"id":"GT-ADJ-1-B","status":"cancelled","statusDetails":"Inhabilitado","date":"2026-09-02T09:00:00-06:00","value":{"amount":200.0,"currency":"GTQ"},"suppliers":[{"id":"GT-NIT-B","name":"Example supplier B"}]}]}}' as record,
+              'example.zip' as _source_file,
+              timestamptz '2026-10-13 12:00:00+00' as _ingested_at
+          union all
+          select
+              'ocds-test-2',
+              '{"ocid":"ocds-test-2","compiledRelease":{"date":"2026-09-03T10:00:00-06:00"}}',
+              'example.zip',
+              timestamptz '2026-10-13 12:00:00+00'
+    expect:
+      rows:
+        - award_id: GT-ADJ-1-A
+          ocid: ocds-test-1
+          status: active
+          awarded_date: 2026-09-01
+          amount: 1500.50
+          currency_code: GTQ
+          supplier_id: GT-NIT-A
+          supplier_count: 1
+        - award_id: GT-ADJ-1-B
+          ocid: ocds-test-1
+          status: cancelled
+          awarded_date: 2026-09-02
+          amount: 200.00
+          currency_code: GTQ
+          supplier_id: GT-NIT-B
+          supplier_count: 1

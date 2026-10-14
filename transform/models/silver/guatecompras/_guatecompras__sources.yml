@@ -1,0 +1,32 @@
+version: 2
+
+sources:
+  - name: bronze_guatecompras
+    description: >
+      Open contracting data landed by the ingestion job from Guatecompras,
+      the public procurement system of Guatemala, stored as Parquet in the
+      bronze bucket. Published under CC BY 4.0.
+    loaded_at_field: _ingested_at
+    freshness:
+      warn_after: {count: 2, period: day}
+      error_after: {count: 7, period: day}
+    tables:
+      - name: contracting_processes
+        description: >
+          One row per contracting process and monthly file. Each row holds
+          the process as the source wrote it: an OCDS record, kept as JSON
+          text. The same process can appear more than once. The record
+          includes contact details of people, which are not copied to silver.
+        config:
+          external_location: "read_parquet('s3://{{ env_var('S3_BUCKET_BRONZE') }}/guatecompras/contracting_processes/parquet/*/*/*.parquet')"
+        columns:
+          - name: ocid
+            description: Open contracting identifier of the process.
+          - name: record
+            description: >
+              The OCDS record as JSON text: links to its releases and the
+              compiled release, which is the current state of the process.
+          - name: _source_file
+            description: Object in the bronze bucket holding the original zip the row was read from.
+          - name: _ingested_at
+            description: When the ingestion run that wrote the row started (UTC).
