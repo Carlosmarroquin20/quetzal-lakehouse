@@ -1,0 +1,213 @@
+version: 2
+
+models:
+  - name: dim_buyer
+    description: >
+      Public bodies that buy through Guatecompras, one row per buyer, with
+      the most recent name the source gives it. A buyer is a body with its
+      own tax number. Several buyers can belong to the same budget entity:
+      for example, the secretariats of the Presidency are separate buyers
+      that share one entity code.
+    columns:
+      - name: buyer_key
+        description: Surrogate key, a hash of buyer_id.
+        data_tests:
+          - not_null
+          - unique
+      - name: buyer_id
+        description: Tax number of the public body, prefixed with GT-NIT. The natural key.
+        data_tests:
+          - not_null
+          - unique
+      - name: buyer_name
+        description: Name of the buyer.
+        data_tests:
+          - not_null
+      - name: entity_code
+        description: >
+          Code of the budget entity the buyer belongs to, in the
+          institutional classifier of the public sector. Empty for the
+          buyers whose processes never list it.
+      - name: entity_type
+        description: Kind of public body the budget entity is, in Spanish.
+      - name: entity_sector
+        description: Sector the budget entity belongs to, in Spanish.
+
+  - name: dim_supplier
+    description: >
+      Suppliers awarded at least one process, one row per supplier, with the
+      most recent name the source gives it. Most suppliers are natural
+      persons: for them supplier_id and supplier_name are personal data.
+    columns:
+      - name: supplier_key
+        description: Surrogate key, a hash of supplier_id.
+        data_tests:
+          - not_null
+          - unique
+      - name: supplier_id
+        description: >
+          Tax number of the supplier prefixed with GT-NIT, or a Guatecompras
+          number prefixed with GT-GCID. The natural key. Personal data when
+          the supplier is a natural person.
+        data_tests:
+          - not_null
+          - unique
+      - name: supplier_name
+        description: Name of the supplier. Personal data when the supplier is a natural person.
+        data_tests:
+          - not_null
+      - name: identifier_scheme
+        description: Registry that issued the identifier.
+      - name: legal_type
+        description: Legal form of the supplier, in Spanish. Empty when the source does not give it.
+      - name: is_natural_person
+        description: >
+          True when the legal form is "INDIVIDUAL". Empty, not false, when
+          the legal form is unknown.
+
+  - name: dim_procurement_method
+    description: >
+      Procedures under which purchases are made, one row per procedure of
+      Guatemalan procurement law.
+    columns:
+      - name: procurement_method_key
+        description: Surrogate key, a hash of the procedure and its OCDS method.
+        data_tests:
+          - not_null
+          - unique
+      - name: procurement_procedure
+        description: Name of the procedure, in Spanish, with the article of the law that governs it.
+        data_tests:
+          - not_null
+      - name: ocds_method
+        description: Method the source assigns to the procedure in the OCDS code list.
+
+  - name: fct_awards
+    description: >
+      Awards made through Guatecompras. The grain is one row per award: a
+      contracting process awarded, in whole or in part, to one supplier for
+      an amount. Processes that were never awarded have no rows here.
+      Cancelled awards are included and flagged with is_cancelled; amounts
+      can be summed across any dimension, and a total that should only count
+      valid awards must filter them out.
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          name: fct_awards_keeps_every_silver_award
+          arguments:
+            compare_model: ref('stg_guatecompras__awards')
+    columns:
+      - name: award_id
+        description: Identifier of the award in the source. One row per award.
+        data_tests:
+          - not_null
+          - unique
+      - name: ocid
+        description: Open contracting identifier of the process the award belongs to.
+        data_tests:
+          - not_null
+      - name: tender_id
+        description: Identifier of the tender, built from its Guatecompras operation number (NOG).
+        data_tests:
+          - not_null
+      - name: award_date_key
+        description: Day in Guatemala on which the award was made. Foreign key to dim_date.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: published_date_key
+        description: Day in Guatemala on which the tender was published. Foreign key to dim_date.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: buyer_key
+        description: Public body that made the purchase. Foreign key to dim_buyer.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_buyer')
+                field: buyer_key
+      - name: supplier_key
+        description: Supplier that received the award. Foreign key to dim_supplier.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_supplier')
+                field: supplier_key
+      - name: procurement_method_key
+        description: Procedure under which the purchase was made. Foreign key to dim_procurement_method.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_procurement_method')
+                field: procurement_method_key
+      - name: currency_key
+        description: Currency in which the award was made. Foreign key to dim_currency.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_currency')
+                field: currency_key
+      - name: procurement_category
+        description: What was bought (goods, services or works). Empty on a small share of processes.
+      - name: is_cancelled
+        description: True when the award was cancelled after being made.
+        data_tests:
+          - not_null
+      - name: awarded_amount
+        description: Amount awarded, in the currency of the award.
+        data_tests:
+          - not_null
+      - name: awarded_amount_gtq
+        description: Amount awarded, in quetzales.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: awarded_amount_usd
+        description: >
+          Amount awarded, in US dollars, converted with the reference rate of
+          the day the award was made (fct_exchange_rates).
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+unit_tests:
+  - name: an_award_is_converted_with_the_rate_of_its_day
+    description: >
+      The amount in dollars uses the reference rate of the award's own day,
+      and a cancelled award is kept and flagged.
+    model: fct_awards
+    given:
+      - input: ref('stg_guatecompras__awards')
+        rows:
+          - {award_id: A1, ocid: P1, status: active, awarded_date: 2026-09-01, amount: 770.00, currency_code: GTQ, supplier_id: S1}
+          - {award_id: A2, ocid: P1, status: cancelled, awarded_date: 2026-09-02, amount: 1000.00, currency_code: GTQ, supplier_id: S2}
+      - input: ref('stg_guatecompras__processes')
+        rows:
+          - {ocid: P1, tender_id: T1, published_date: 2026-08-31, buyer_id: B1, procurement_method_details: Example procedure, procurement_method: open, procurement_category: goods}
+      - input: ref('fct_exchange_rates')
+        rows:
+          - {date_key: 20260901, currency_key: usd, reference_rate: 7.7000000}
+          - {date_key: 20260902, currency_key: usd, reference_rate: 8.0000000}
+          - {date_key: 20260901, currency_key: other, reference_rate: 1.0000000}
+      - input: ref('dim_currency')
+        rows:
+          - {currency_key: usd, currency_code: USD}
+          - {currency_key: other, currency_code: XXX}
+    expect:
+      rows:
+        - {award_id: A1, award_date_key: 20260901, published_date_key: 20260831, procurement_category: goods, is_cancelled: false, awarded_amount: 770.00, awarded_amount_gtq: 770.00, awarded_amount_usd: 100.00}
+        - {award_id: A2, award_date_key: 20260902, published_date_key: 20260831, procurement_category: goods, is_cancelled: true, awarded_amount: 1000.00, awarded_amount_gtq: 1000.00, awarded_amount_usd: 125.00}
