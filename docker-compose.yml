@@ -15,7 +15,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
       # Comma-separated list. Missing buckets are created on every start;
       # existing ones are left as they are.
-      S3_BUCKET: "${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env},${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env}"
+      S3_BUCKET: "${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env},${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env},${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env}"
     ports:
       # Published on loopback only: reachable from this machine, not the LAN.
       - "127.0.0.1:8333:8333"
@@ -57,6 +57,7 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
       S3_BUCKET_BRONZE: ${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env}
       S3_BUCKET_SILVER: ${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env}
+      S3_BUCKET_GOLD: ${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env}
     depends_on:
       storage:
         condition: service_healthy
