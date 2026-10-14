@@ -19,3 +19,6 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Files downloaded by hand, waiting to be loaded into bronze
+landing/

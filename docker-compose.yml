@@ -42,6 +42,10 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
       S3_BUCKET_BRONZE: ${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env}
+    volumes:
+      # Files downloaded by hand, for sources that cannot be fetched by a
+      # job. Read-only: a job loads them but never changes or deletes them.
+      - ./landing:/landing:ro
     depends_on:
       storage:
         condition: service_healthy
