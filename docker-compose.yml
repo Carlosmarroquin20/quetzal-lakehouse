@@ -12,22 +12,37 @@ x-airflow: &airflow
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__CORE__DEFAULT_TIMEZONE: America/Guatemala
+    # A dbt build can starve the scheduler of CPU inside Docker's virtual
+    # machine. With the default of 30 seconds without a heartbeat, Airflow
+    # declared the scheduler dead mid-build and killed the dbt task.
+    AIRFLOW__SCHEDULER__SCHEDULER_HEALTH_CHECK_THRESHOLD: "120"
     # Local development only: the interface is open without a login. It is
     # published on loopback, so only this machine can reach it.
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
-    # What the tasks pass on to the containers they start.
+    # What the tasks pass on to the containers they start. Airflow runs the
+    # prod environment, and each kind of task gets the key of its own role.
     S3_REGION: ${S3_REGION:?set S3_REGION in .env}
-    S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
-    S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
     S3_BUCKET_BRONZE: ${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env}
     S3_BUCKET_SILVER: ${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env}
     S3_BUCKET_GOLD: ${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env}
+    S3_INGESTION_ACCESS_KEY_ID: ${S3_INGESTION_ACCESS_KEY_ID:?set S3_INGESTION_ACCESS_KEY_ID in .env}
+    S3_INGESTION_SECRET_ACCESS_KEY: ${S3_INGESTION_SECRET_ACCESS_KEY:?set S3_INGESTION_SECRET_ACCESS_KEY in .env}
+    S3_TRANSFORM_PROD_ACCESS_KEY_ID: ${S3_TRANSFORM_PROD_ACCESS_KEY_ID:?set S3_TRANSFORM_PROD_ACCESS_KEY_ID in .env}
+    S3_TRANSFORM_PROD_SECRET_ACCESS_KEY: ${S3_TRANSFORM_PROD_SECRET_ACCESS_KEY:?set S3_TRANSFORM_PROD_SECRET_ACCESS_KEY in .env}
+    PSEUDONYMIZATION_KEY_PROD: ${PSEUDONYMIZATION_KEY_PROD:?set PSEUDONYMIZATION_KEY_PROD in .env}
     # The Docker daemon resolves bind mounts on the host, so the landing
     # folder has to be given as a host path.
     PROJECT_HOST_DIR: ${PROJECT_HOST_DIR:?set PROJECT_HOST_DIR in .env}
   volumes:
     - ./orchestration/dags:/opt/airflow/dags:ro
     - airflow-logs:/opt/airflow/logs
+
+# Shared by the dbt services; each one adds its environment's buckets, key
+# pair and pseudonymization key.
+x-dbt-common: &dbt-common
+  S3_ENDPOINT_URL: http://storage:8333
+  S3_REGION: ${S3_REGION:?set S3_REGION in .env}
+  S3_BUCKET_BRONZE: ${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env}
 
 services:
   storage:
@@ -38,13 +53,16 @@ services:
     # bundled components) may change between releases.
     image: chrislusf/seaweedfs:4.48
     environment:
-      # Mapped from project-specific names so that real AWS credentials
-      # exported in the host shell are never picked up by accident.
+      # The administrator key pair. Jobs do not use it: each role has its
+      # own key pair, created by storage-init. Mapped from project-specific
+      # names so that real AWS credentials exported in the host shell are
+      # never picked up by accident.
       AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
       # Comma-separated list. Missing buckets are created on every start;
-      # existing ones are left as they are.
-      S3_BUCKET: "${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env},${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env},${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env}"
+      # existing ones are left as they are. Bronze is shared; silver and gold
+      # have one bucket per environment.
+      S3_BUCKET: "${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env},${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env},${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env},${S3_BUCKET_SILVER_DEV:?set S3_BUCKET_SILVER_DEV in .env},${S3_BUCKET_GOLD_DEV:?set S3_BUCKET_GOLD_DEV in .env}"
     ports:
       # Published on loopback only: reachable from this machine, not the LAN.
       - "127.0.0.1:8333:8333"
@@ -58,6 +76,41 @@ services:
       retries: 5
       start_period: 15s
 
+  storage-init:
+    # Creates one identity per role, each allowed only what its role needs.
+    # Runs on every start and ends; applying the same identities again
+    # changes nothing.
+    image: chrislusf/seaweedfs:4.48
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        # weed shell echoes the whole configuration, secret keys included, so
+        # its output is discarded.
+        weed shell -master=storage:9333 > /dev/null <<EOF
+        s3.configure -user=ingestion -access_key=$$INGESTION_KEY -secret_key=$$INGESTION_SECRET -buckets=$$BRONZE -actions=Read,Write,List -apply
+        s3.configure -user=transform-prod -access_key=$$PROD_KEY -secret_key=$$PROD_SECRET -buckets=$$BRONZE -actions=Read,List -apply
+        s3.configure -user=transform-prod -buckets=$$SILVER,$$GOLD -actions=Read,Write,List -apply
+        s3.configure -user=transform-dev -access_key=$$DEV_KEY -secret_key=$$DEV_SECRET -buckets=$$BRONZE -actions=Read,List -apply
+        s3.configure -user=transform-dev -buckets=$$SILVER_DEV,$$GOLD_DEV -actions=Read,Write,List -apply
+        EOF
+        echo "identities applied: ingestion, transform-prod, transform-dev"
+    environment:
+      BRONZE: ${S3_BUCKET_BRONZE}
+      SILVER: ${S3_BUCKET_SILVER}
+      GOLD: ${S3_BUCKET_GOLD}
+      SILVER_DEV: ${S3_BUCKET_SILVER_DEV}
+      GOLD_DEV: ${S3_BUCKET_GOLD_DEV}
+      INGESTION_KEY: ${S3_INGESTION_ACCESS_KEY_ID:?set S3_INGESTION_ACCESS_KEY_ID in .env}
+      INGESTION_SECRET: ${S3_INGESTION_SECRET_ACCESS_KEY:?set S3_INGESTION_SECRET_ACCESS_KEY in .env}
+      PROD_KEY: ${S3_TRANSFORM_PROD_ACCESS_KEY_ID:?set S3_TRANSFORM_PROD_ACCESS_KEY_ID in .env}
+      PROD_SECRET: ${S3_TRANSFORM_PROD_SECRET_ACCESS_KEY:?set S3_TRANSFORM_PROD_SECRET_ACCESS_KEY in .env}
+      DEV_KEY: ${S3_TRANSFORM_DEV_ACCESS_KEY_ID:?set S3_TRANSFORM_DEV_ACCESS_KEY_ID in .env}
+      DEV_SECRET: ${S3_TRANSFORM_DEV_SECRET_ACCESS_KEY:?set S3_TRANSFORM_DEV_SECRET_ACCESS_KEY in .env}
+    depends_on:
+      storage:
+        condition: service_healthy
+
   ingestion:
     # Jobs, not a long-running service. The profile keeps `docker compose up`
     # from starting it; run one with `docker compose run --rm ingestion <job>`,
@@ -70,56 +123,74 @@ services:
       # Inside the Compose network the store is reached by its service name.
       S3_ENDPOINT_URL: http://storage:8333
       S3_REGION: ${S3_REGION:?set S3_REGION in .env}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
+      # The ingestion role: it can write bronze and nothing else.
+      S3_ACCESS_KEY_ID: ${S3_INGESTION_ACCESS_KEY_ID:?set S3_INGESTION_ACCESS_KEY_ID in .env}
+      S3_SECRET_ACCESS_KEY: ${S3_INGESTION_SECRET_ACCESS_KEY:?set S3_INGESTION_SECRET_ACCESS_KEY in .env}
       S3_BUCKET_BRONZE: ${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env}
     volumes:
       # Files downloaded by hand, for sources that cannot be fetched by a
       # job. Read-only: a job loads them but never changes or deletes them.
       - ./landing:/landing:ro
-    depends_on:
-      storage:
-        condition: service_healthy
+    depends_on: &after-storage-init
+      storage-init:
+        condition: service_completed_successfully
 
   transform:
-    # dbt job. Without arguments it runs `dbt build`; anything after the
-    # service name replaces that, e.g. `docker compose run --rm transform test`.
+    # dbt in the prod environment, the one Airflow runs and gold consumers
+    # read. Without arguments it runs `dbt build`; anything after the service
+    # name replaces that, e.g. `docker compose run --rm transform test`.
     build: ./transform
     image: quetzal-lakehouse-transform
     profiles: ["jobs"]
-    environment: &dbt-environment
-      S3_ENDPOINT_URL: http://storage:8333
-      S3_REGION: ${S3_REGION:?set S3_REGION in .env}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
-      S3_BUCKET_BRONZE: ${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env}
+    environment: &dbt-prod-environment
+      <<: *dbt-common
+      DBT_TARGET: prod
       S3_BUCKET_SILVER: ${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env}
       S3_BUCKET_GOLD: ${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env}
+      S3_ACCESS_KEY_ID: ${S3_TRANSFORM_PROD_ACCESS_KEY_ID:?set S3_TRANSFORM_PROD_ACCESS_KEY_ID in .env}
+      S3_SECRET_ACCESS_KEY: ${S3_TRANSFORM_PROD_SECRET_ACCESS_KEY:?set S3_TRANSFORM_PROD_SECRET_ACCESS_KEY in .env}
+      PSEUDONYMIZATION_KEY: ${PSEUDONYMIZATION_KEY_PROD:?set PSEUDONYMIZATION_KEY_PROD in .env}
     volumes:
       # DuckDB scratch database: views over the Parquet files and the seeds.
       # Kept between runs so that separate dbt commands see each other's
       # results. It holds no data of its own and can be deleted at any time.
       - transform-state:/app/state
-    depends_on:
-      storage:
-        condition: service_healthy
+    depends_on: *after-storage-init
+
+  transform-dev:
+    # dbt in the dev environment, for trying changes. It reads the same
+    # bronze but writes its own silver and gold buckets, with a key pair that
+    # cannot touch prod.
+    build: ./transform
+    image: quetzal-lakehouse-transform
+    profiles: ["jobs"]
+    environment:
+      <<: *dbt-common
+      DBT_TARGET: dev
+      S3_BUCKET_SILVER: ${S3_BUCKET_SILVER_DEV:?set S3_BUCKET_SILVER_DEV in .env}
+      S3_BUCKET_GOLD: ${S3_BUCKET_GOLD_DEV:?set S3_BUCKET_GOLD_DEV in .env}
+      S3_ACCESS_KEY_ID: ${S3_TRANSFORM_DEV_ACCESS_KEY_ID:?set S3_TRANSFORM_DEV_ACCESS_KEY_ID in .env}
+      S3_SECRET_ACCESS_KEY: ${S3_TRANSFORM_DEV_SECRET_ACCESS_KEY:?set S3_TRANSFORM_DEV_SECRET_ACCESS_KEY in .env}
+      PSEUDONYMIZATION_KEY: ${PSEUDONYMIZATION_KEY_DEV:?set PSEUDONYMIZATION_KEY_DEV in .env}
+    volumes:
+      - transform-state-dev:/app/state
+    depends_on: *after-storage-init
 
   docs:
-    # dbt documentation site with the lineage graph, at http://localhost:8080.
-    # It describes what the last transform run built, so run that job first.
+    # dbt documentation site of the prod environment, with the lineage graph,
+    # at http://localhost:8080. It describes what the last prod run built, so
+    # run that job first.
     build: ./transform
     image: quetzal-lakehouse-transform
     profiles: ["docs"]
     entrypoint: ["sh", "-c"]
     command: ["dbt docs generate && exec dbt docs serve --host 0.0.0.0 --port 8080 --no-browser"]
-    environment: *dbt-environment
+    environment: *dbt-prod-environment
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - transform-state:/app/state
-    depends_on:
-      storage:
-        condition: service_healthy
+    depends_on: *after-storage-init
 
   # Airflow runs the pipeline every day. It only schedules: each task starts
   # the ingestion or transform image as a container, through the Docker
@@ -184,5 +255,6 @@ services:
 volumes:
   storage-data:
   transform-state:
+  transform-state-dev:
   airflow-db-data:
   airflow-logs:

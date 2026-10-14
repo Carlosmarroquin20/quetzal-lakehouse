@@ -13,28 +13,36 @@ import os
 from datetime import timedelta
 
 import pendulum
-from docker.types import Mount
-
 from airflow.providers.docker.operators.docker import DockerOperator
 from airflow.sdk import DAG
+from docker.types import Mount
 
 NETWORK = "quetzal-lakehouse_default"
 INGESTION_IMAGE = "quetzal-lakehouse-ingestion"
 TRANSFORM_IMAGE = "quetzal-lakehouse-transform"
 
-# Configuration the containers need. The key pair goes through
-# private_environment, which Airflow neither renders in its interface nor
-# writes to the logs.
+# Configuration the containers need. Airflow runs the prod environment.
 STORAGE = {
     "S3_ENDPOINT_URL": "http://storage:8333",
     "S3_REGION": os.environ.get("S3_REGION", ""),
     "S3_BUCKET_BRONZE": os.environ.get("S3_BUCKET_BRONZE", ""),
     "S3_BUCKET_SILVER": os.environ.get("S3_BUCKET_SILVER", ""),
     "S3_BUCKET_GOLD": os.environ.get("S3_BUCKET_GOLD", ""),
+    "DBT_TARGET": "prod",
 }
-CREDENTIALS = {
-    "S3_ACCESS_KEY_ID": os.environ.get("S3_ACCESS_KEY_ID", ""),
-    "S3_SECRET_ACCESS_KEY": os.environ.get("S3_SECRET_ACCESS_KEY", ""),
+
+# Each kind of task gets the key pair of its own role: ingestion can only
+# write bronze, prod dbt can only write prod silver and gold. Secrets go
+# through private_environment, which Airflow neither renders in its
+# interface nor writes to the logs.
+INGESTION_SECRETS = {
+    "S3_ACCESS_KEY_ID": os.environ.get("S3_INGESTION_ACCESS_KEY_ID", ""),
+    "S3_SECRET_ACCESS_KEY": os.environ.get("S3_INGESTION_SECRET_ACCESS_KEY", ""),
+}
+TRANSFORM_SECRETS = {
+    "S3_ACCESS_KEY_ID": os.environ.get("S3_TRANSFORM_PROD_ACCESS_KEY_ID", ""),
+    "S3_SECRET_ACCESS_KEY": os.environ.get("S3_TRANSFORM_PROD_SECRET_ACCESS_KEY", ""),
+    "PSEUDONYMIZATION_KEY": os.environ.get("PSEUDONYMIZATION_KEY_PROD", ""),
 }
 
 # Guatecompras is loaded from this month on. Months the source has not changed
@@ -42,13 +50,19 @@ CREDENTIALS = {
 GUATECOMPRAS_FIRST_MONTH = "2025-01"
 
 
-def job(task_id: str, image: str, command: list[str], mounts: list[Mount] | None = None) -> DockerOperator:
+def job(
+    task_id: str,
+    image: str,
+    command: list[str],
+    secrets: dict[str, str],
+    mounts: list[Mount] | None = None,
+) -> DockerOperator:
     return DockerOperator(
         task_id=task_id,
         image=image,
         command=command,
         environment=STORAGE,
-        private_environment=CREDENTIALS,
+        private_environment=secrets,
         network_mode=NETWORK,
         mounts=mounts or [],
         # The operator would otherwise try to mount a temporary folder of the
@@ -75,18 +89,22 @@ with DAG(
     },
     tags=["lakehouse"],
 ) as dag:
-    exchange_rates = job("ingest_exchange_rates", INGESTION_IMAGE, ["exchange-rates"])
+    exchange_rates = job(
+        "ingest_exchange_rates", INGESTION_IMAGE, ["exchange-rates"], INGESTION_SECRETS
+    )
 
     contracting_processes = job(
         "ingest_contracting_processes",
         INGESTION_IMAGE,
         ["contracting-processes", "--from-month", GUATECOMPRAS_FIRST_MONTH],
+        INGESTION_SECRETS,
     )
 
     budget_execution = job(
         "ingest_budget_execution",
         INGESTION_IMAGE,
         ["budget-execution"],
+        INGESTION_SECRETS,
         mounts=[
             Mount(
                 source=f"{os.environ.get('PROJECT_HOST_DIR', '')}/landing",
@@ -101,8 +119,13 @@ with DAG(
         "dbt_build",
         TRANSFORM_IMAGE,
         ["build"],
+        TRANSFORM_SECRETS,
         mounts=[
-            Mount(source="quetzal-lakehouse_transform-state", target="/app/state", type="volume")
+            Mount(
+                source="quetzal-lakehouse_transform-state",
+                target="/app/state",
+                type="volume",
+            )
         ],
     )
 
