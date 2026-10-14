@@ -28,6 +28,16 @@ models:
           Code of the budget entity the buyer belongs to, in the
           institutional classifier of the public sector. Empty for the
           buyers whose processes never list it.
+      - name: entity_key
+        description: >
+          Budget entity the buyer belongs to. Foreign key to dim_entity, which
+          is how procurement is compared with the budget. Empty when
+          entity_code is.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_entity')
+                field: entity_key
       - name: entity_type
         description: Kind of public body the budget entity is, in Spanish.
       - name: entity_sector

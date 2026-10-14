@@ -1,0 +1,277 @@
+version: 2
+
+models:
+  - name: dim_entity
+    description: >
+      Budget entities of the public sector, one row per entity code of the
+      institutional classifier. Shared by the budget and procurement facts,
+      so the two can be compared entity by entity. The 19 central government
+      entities carry their official name from the budget data. Every other
+      entity (municipalities, decentralized bodies, public companies) is
+      known only through Guatecompras, and carries the buyer name used in
+      most of its processes.
+    columns:
+      - name: entity_key
+        description: Surrogate key, a hash of entity_code.
+        data_tests:
+          - not_null
+          - unique
+      - name: entity_code
+        description: Code of the entity in the institutional classifier. The natural key.
+        data_tests:
+          - not_null
+          - unique
+      - name: entity_name
+        description: Name of the entity. Official when name_source is MINFIN.
+        data_tests:
+          - not_null
+      - name: name_source
+        description: Where the name comes from, MINFIN or Guatecompras.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["MINFIN", "Guatecompras"]
+      - name: entity_type
+        description: Kind of public body, in Spanish, as Guatecompras reports it. Empty for entities that never buy through it.
+      - name: entity_sector
+        description: Sector, in Spanish, as Guatecompras reports it.
+      - name: has_budget_data
+        description: True when the entity appears in the budget execution data.
+        data_tests:
+          - not_null
+      - name: has_procurement_data
+        description: True when some process in Guatecompras names the entity.
+        data_tests:
+          - not_null
+
+  - name: dim_budget_program
+    description: >
+      Programmatic structure of the budget, one row per path of executing
+      unit, program, subprogram, project, activity and work within an entity.
+      Those codes are only unique within their entity, so the whole path is
+      the key. Names are those of the most recent fiscal year.
+    columns:
+      - name: budget_program_key
+        description: Surrogate key, a hash of the entity code and the six codes below it.
+        data_tests:
+          - not_null
+          - unique
+      - name: entity_code
+        description: Entity the program belongs to.
+        data_tests:
+          - not_null
+      - name: executing_unit_code
+        description: Executing unit inside the entity.
+      - name: executing_unit_name
+        description: Name of the executing unit.
+      - name: program_code
+        description: Budget program.
+      - name: program_name
+        description: Name of the program.
+      - name: subprogram_code
+        description: Subprogram inside the program.
+      - name: subprogram_name
+        description: Name of the subprogram.
+      - name: project_code
+        description: Project inside the subprogram.
+      - name: project_name
+        description: Name of the project.
+      - name: activity_code
+        description: Activity inside the project.
+      - name: activity_name
+        description: Name of the activity.
+      - name: work_code
+        description: Public work, 0 when there is none.
+      - name: work_name
+        description: Name of the work.
+
+  - name: dim_expenditure_object
+    description: >
+      What the money is spent on, in the national object-of-expenditure
+      classifier: one row per expenditure item ("renglón"), with its subgroup
+      and group.
+    columns:
+      - name: expenditure_object_key
+        description: Surrogate key, a hash of the expenditure item code.
+        data_tests:
+          - not_null
+          - unique
+      - name: expenditure_item_code
+        description: Expenditure item code. The natural key.
+        data_tests:
+          - not_null
+          - unique
+      - name: expenditure_item_name
+        description: Name of the expenditure item, in Spanish.
+      - name: expenditure_subgroup_code
+        description: Subgroup the item belongs to.
+      - name: expenditure_subgroup_name
+        description: Name of the subgroup, in Spanish.
+      - name: expenditure_group_code
+        description: Group the item belongs to, for example 0 for personnel services.
+      - name: expenditure_group_name
+        description: Name of the group, in Spanish.
+
+  - name: dim_funding_source
+    description: Where the money comes from (taxes, loans, donations...), one row per funding source.
+    columns:
+      - name: funding_source_key
+        description: Surrogate key, a hash of the funding source code.
+        data_tests:
+          - not_null
+          - unique
+      - name: funding_source_code
+        description: Funding source code. The natural key.
+        data_tests:
+          - not_null
+          - unique
+      - name: funding_source_name
+        description: Name of the funding source, in Spanish.
+
+  - name: dim_geography
+    description: >
+      Where the money is spent, one row per municipality with its department.
+      A few codes stand for spending without a single location rather than a
+      place.
+    columns:
+      - name: geography_key
+        description: Surrogate key, a hash of the municipality code.
+        data_tests:
+          - not_null
+          - unique
+      - name: municipality_code
+        description: Municipality code, unique across departments. The natural key.
+        data_tests:
+          - not_null
+          - unique
+      - name: municipality_name
+        description: Name of the municipality.
+      - name: department_code
+        description: Department the municipality belongs to.
+      - name: department_name
+        description: Name of the department.
+
+  - name: fct_budget_execution
+    description: >
+      Execution of the central government's expenditure budget. The grain is
+      one row per budget line and fiscal year, the grain of the source. Only
+      the latest file of each year is kept: a closed year is final, and the
+      current year accumulates up to the day the ministry produced the file
+      that was loaded. Amounts are in quetzales and add up across every
+      dimension within a fiscal year.
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          name: fct_budget_execution_keeps_every_silver_line
+          arguments:
+            compare_model: ref('stg_minfin__central_government_expenditure')
+    columns:
+      - name: fiscal_year
+        description: Fiscal year of the budget.
+        data_tests:
+          - not_null
+      - name: entity_key
+        description: Budget entity. Foreign key to dim_entity.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_entity')
+                field: entity_key
+      - name: budget_program_key
+        description: Executing unit and program path. Foreign key to dim_budget_program.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_budget_program')
+                field: budget_program_key
+      - name: expenditure_object_key
+        description: What the money is spent on. Foreign key to dim_expenditure_object.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_expenditure_object')
+                field: expenditure_object_key
+      - name: funding_source_key
+        description: Where the money comes from. Foreign key to dim_funding_source.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_funding_source')
+                field: funding_source_key
+      - name: geography_key
+        description: Where the money is spent. Foreign key to dim_geography.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_geography')
+                field: geography_key
+      - name: budget_type_code
+        description: Budget type (operating, investment or debt). Degenerate attribute.
+      - name: budget_type_name
+        description: Name of the budget type, in Spanish.
+      - name: economic_code
+        description: Economic classification of the expenditure. Degenerate attribute.
+      - name: economic_name
+        description: Name of the economic class, in Spanish.
+      - name: organism_code
+        description: Lending or donor organism, 0 when there is none. Degenerate attribute.
+      - name: organism_name
+        description: Name of the organism.
+      - name: correlative
+        description: Number that tells apart lines sharing every other code.
+      - name: initial_budget
+        description: Budget approved for the year ("asignado").
+        data_tests:
+          - not_null
+      - name: budget_changes
+        description: Net changes to the approved budget ("modificado"). Can be negative.
+        data_tests:
+          - not_null
+      - name: current_budget
+        description: Approved budget plus changes ("vigente").
+        data_tests:
+          - not_null
+      - name: pre_committed
+        description: Amount reserved for purchases being prepared ("precomprometido").
+        data_tests:
+          - not_null
+      - name: committed
+        description: Amount committed through contracts or purchase orders ("comprometido").
+        data_tests:
+          - not_null
+      - name: accrued
+        description: Amount accrued for goods and services received ("devengado"); the usual measure of what was spent.
+        data_tests:
+          - not_null
+      - name: paid
+        description: Amount paid ("pagado").
+        data_tests:
+          - not_null
+
+unit_tests:
+  - name: entities_take_official_names_first
+    description: >
+      An entity in the budget data keeps its official name even when buyers
+      call it otherwise; an entity known only from procurement takes the
+      buyer name used in most of its processes.
+    model: dim_entity
+    given:
+      - input: ref('stg_minfin__central_government_expenditure')
+        rows:
+          - {entity_code: "11130009", entity_name: MINISTERIO DE SALUD PUBLICA, fiscal_year: 2026}
+      - input: ref('stg_guatecompras__processes')
+        rows:
+          - {entity_code: "11130009", buyer_name: HOSPITAL REGIONAL, entity_type: Central, entity_sector: Public, updated_at: "2026-09-01 10:00:00-06"}
+          - {entity_code: "12100101", buyer_name: MUNICIPALIDAD DE GUATEMALA, entity_type: Local, entity_sector: Public, updated_at: "2026-09-01 10:00:00-06"}
+          - {entity_code: "12100101", buyer_name: MUNICIPALIDAD DE GUATEMALA, entity_type: Local, entity_sector: Public, updated_at: "2026-09-02 10:00:00-06"}
+          - {entity_code: "12100101", buyer_name: FIDEICOMISO MUNICIPAL, entity_type: Local, entity_sector: Public, updated_at: "2026-09-03 10:00:00-06"}
+          - {entity_code: null, buyer_name: BUYER WITHOUT ENTITY, entity_type: null, entity_sector: null, updated_at: "2026-09-03 10:00:00-06"}
+    expect:
+      rows:
+        - {entity_code: "11130009", entity_name: MINISTERIO DE SALUD PUBLICA, name_source: MINFIN, entity_type: Central, has_budget_data: true, has_procurement_data: true}
+        - {entity_code: "12100101", entity_name: MUNICIPALIDAD DE GUATEMALA, name_source: Guatecompras, entity_type: Local, has_budget_data: false, has_procurement_data: true}

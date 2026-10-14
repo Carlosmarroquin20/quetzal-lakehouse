@@ -30,6 +30,12 @@ select
     buyer_id,
     buyer_name,
     entity_code,
+    -- Points to the budget entity, so procurement can be compared with the
+    -- budget. Empty for buyers whose processes never name their entity.
+    case
+        when entity_code is not null
+            then {{ dbt_utils.generate_surrogate_key(['entity_code']) }}
+    end as entity_key,
     entity_type,
     entity_sector
 from buyers
