@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 
 @dataclass(frozen=True)
@@ -41,3 +42,14 @@ def create_s3_client(settings: StorageSettings):
         # a local store reached through a plain hostname cannot resolve.
         config=Config(s3={"addressing_style": "path"}),
     )
+
+
+def object_metadata(s3, bucket: str, key: str) -> dict[str, str] | None:
+    """Return the user metadata of a stored object, or None if there is no object."""
+    try:
+        head = s3.head_object(Bucket=bucket, Key=key)
+    except ClientError as error:
+        if error.response["Error"]["Code"] in ("404", "NoSuchKey", "NotFound"):
+            return None
+        raise
+    return head.get("Metadata", {})

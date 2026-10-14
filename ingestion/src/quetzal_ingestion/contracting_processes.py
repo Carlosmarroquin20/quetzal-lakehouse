@@ -20,11 +20,14 @@ from typing import BinaryIO
 import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
-from botocore.exceptions import ClientError
 
 from quetzal_ingestion import guatecompras, runtime
 from quetzal_ingestion.guatecompras import GuatecomprasError, Month
-from quetzal_ingestion.storage import StorageSettings, create_s3_client
+from quetzal_ingestion.storage import (
+    StorageSettings,
+    create_s3_client,
+    object_metadata,
+)
 
 DATASET = "guatecompras/contracting_processes"
 CHECKSUM_METADATA = "source-json-sha256"
@@ -79,13 +82,8 @@ class HashingReader:
 
 def stored_checksum(s3, bucket: str, month: Month) -> str | None:
     """Return the source checksum of the month already in bronze, if any."""
-    try:
-        head = s3.head_object(Bucket=bucket, Key=parquet_key(month))
-    except ClientError as error:
-        if error.response["Error"]["Code"] in ("404", "NoSuchKey", "NotFound"):
-            return None
-        raise
-    return head.get("Metadata", {}).get(CHECKSUM_METADATA)
+    metadata = object_metadata(s3, bucket, parquet_key(month))
+    return None if metadata is None else metadata.get(CHECKSUM_METADATA)
 
 
 def to_parquet(
