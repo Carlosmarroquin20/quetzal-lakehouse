@@ -2,10 +2,11 @@
 
 import sys
 
-from quetzal_ingestion import exchange_rates
+from quetzal_ingestion import contracting_processes, exchange_rates
 
 JOBS = {
     "exchange-rates": exchange_rates.main,
+    "contracting-processes": contracting_processes.main,
 }
 
 
