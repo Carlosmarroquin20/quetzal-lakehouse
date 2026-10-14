@@ -1,0 +1,98 @@
+version: 2
+
+models:
+  - name: stg_banguat__exchange_rates
+    description: >
+      Reference exchange rate of the quetzal against the US dollar published
+      by the Banco de Guatemala, one row per published day since 1989-11-06.
+      Values are the ones the source published: nothing is filled in or
+      corrected. Three properties of the source are worth knowing. Until
+      2006-12-01 buying and selling rates differ; since 2006-12-02 the source
+      publishes a single rate in both fields. On 85 days between 1989-11-16
+      and 1991-04-09 the selling rate is below the buying rate. Five calendar
+      days were never published and are listed in the seed
+      banguat_known_missing_dates.
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          name: silver_keeps_every_bronze_row
+          arguments:
+            compare_model: source('bronze_banguat', 'exchange_rates')
+      - dbt_utils.expression_is_true:
+          name: sell_rate_not_below_buy_rate_since_1992
+          description: >
+            A selling rate below the buying rate only occurs in the documented
+            1989-1991 period. Anywhere else it is a new anomaly.
+          arguments:
+            expression: "sell_rate >= buy_rate"
+          config:
+            where: "rate_date >= date '1992-01-01'"
+      - dbt_utils.expression_is_true:
+          name: single_rate_since_2006_12_02
+          description: >
+            Since 2006-12-02 the source publishes one reference rate. If the
+            two fields diverge again, their meaning has changed.
+          arguments:
+            expression: "buy_rate = sell_rate"
+          config:
+            where: "rate_date >= date '2006-12-02'"
+    columns:
+      - name: rate_date
+        description: Calendar day the rate applies to.
+        data_tests:
+          - not_null
+          - unique
+      - name: currency_code
+        description: >
+          ISO 4217 code of the currency being priced. Rates are expressed in
+          quetzales per one unit of this currency.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["USD"]
+      - name: buy_rate
+        description: Buying rate, in quetzales per unit of the currency.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 20
+      - name: sell_rate
+        description: Selling rate, in quetzales per unit of the currency.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 20
+      - name: source_file
+        description: Object in the bronze bucket holding the raw response the row came from.
+        data_tests:
+          - not_null
+      - name: ingested_at
+        description: When the ingestion run that loaded the row started (UTC).
+        data_tests:
+          - not_null
+
+unit_tests:
+  - name: source_text_becomes_typed_values
+    description: Dates, numbers and the currency code are converted from the source text.
+    model: stg_banguat__exchange_rates
+    given:
+      - input: source('bronze_banguat', 'exchange_rates')
+        format: sql
+        rows: |
+          select
+              '2' as moneda,
+              '05/03/2001' as fecha,
+              '7.75966' as venta,
+              '7.74135' as compra,
+              'banguat/exchange_rates/raw/year=2001/response.xml' as _source_file,
+              timestamptz '2026-10-13 12:00:00+00' as _ingested_at
+    expect:
+      rows:
+        - rate_date: 2001-03-05
+          currency_code: USD
+          buy_rate: 7.741350
+          sell_rate: 7.759660

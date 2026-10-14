@@ -1,0 +1,18 @@
+version: 2
+
+seeds:
+  - name: banguat_known_missing_dates
+    description: >
+      Calendar days for which the Banco de Guatemala web service returns no
+      exchange rate (checked on 2026-10-13). They are the accepted exceptions
+      of the completeness test. A date belongs here only while the source
+      keeps omitting it.
+    config:
+      column_types:
+        missing_date: date
+    columns:
+      - name: missing_date
+        description: Day with no published rate.
+        data_tests:
+          - not_null
+          - unique
