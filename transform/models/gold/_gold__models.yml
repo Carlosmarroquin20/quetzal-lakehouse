@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: >
+      Calendar dimension with one row per day, from 1989-01-01 to the end of
+      the current year. It is shared by every fact table.
+    data_tests:
+      - dbt_utils.sequential_values:
+          name: dim_date_has_no_missing_days
+          arguments:
+            column_name: date_day
+            interval: 1
+            datepart: day
+    columns:
+      - name: date_key
+        description: Surrogate key, the date written as the integer YYYYMMDD.
+        data_tests:
+          - not_null
+          - unique
+      - name: date_day
+        description: The calendar day.
+        data_tests:
+          - not_null
+          - unique
+      - name: year
+        description: Calendar year.
+      - name: quarter
+        description: Quarter of the year, 1 to 4.
+      - name: month
+        description: Month of the year, 1 to 12.
+      - name: month_name
+        description: Name of the month in English.
+      - name: day_of_month
+        description: Day of the month, 1 to 31.
+      - name: day_of_week
+        description: ISO day of the week, 1 (Monday) to 7 (Sunday).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7]
+      - name: day_name
+        description: Name of the day in English.
+      - name: is_weekend
+        description: True on Saturdays and Sundays. Public holidays are not marked.
+      - name: first_day_of_month
+        description: First day of the month the day belongs to, for grouping by month.
+
+  - name: dim_currency
+    description: >
+      Currency dimension, one row per currency known to the lakehouse.
+    columns:
+      - name: currency_key
+        description: Surrogate key, a hash of the ISO 4217 code.
+        data_tests:
+          - not_null
+          - unique
+      - name: currency_code
+        description: ISO 4217 code. The natural key.
+        data_tests:
+          - not_null
+          - unique
+      - name: currency_name
+        description: Name of the currency in English.

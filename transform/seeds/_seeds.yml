@@ -16,3 +16,19 @@ seeds:
         data_tests:
           - not_null
           - unique
+
+  - name: currencies
+    description: >
+      Currencies the lakehouse knows about, identified by their ISO 4217
+      code. Maintained by hand: a currency is added here when a source starts
+      using it.
+    columns:
+      - name: currency_code
+        description: ISO 4217 code.
+        data_tests:
+          - not_null
+          - unique
+      - name: currency_name
+        description: Name of the currency in English.
+        data_tests:
+          - not_null

@@ -12,8 +12,7 @@ flags:
 
 models:
   quetzal_lakehouse:
-    silver:
-      # Models are written as Parquet files to the silver bucket. DuckDB only
-      # keeps a view over each file.
-      +materialized: external
-      +format: parquet
+    # Every model is written as a Parquet file to the bucket of its layer.
+    # DuckDB only keeps a view over each file.
+    +materialized: external
+    +format: parquet
