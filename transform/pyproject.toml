@@ -1,0 +1,13 @@
+[project]
+name = "quetzal-transform"
+version = "0.1.0"
+description = "dbt project that builds the silver and gold layers of the lakehouse."
+requires-python = ">=3.13"
+dependencies = [
+    "dbt-core>=1.12.5",
+    "dbt-duckdb>=1.11.0",
+]
+
+# This directory holds a dbt project, not an installable Python package.
+[tool.uv]
+package = false

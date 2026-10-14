@@ -1,0 +1,19 @@
+name: quetzal_lakehouse
+version: "0.1.0"
+profile: quetzal_lakehouse
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+
+flags:
+  # Do not report usage statistics to dbt Labs.
+  send_anonymous_usage_stats: false
+
+models:
+  quetzal_lakehouse:
+    silver:
+      # Models are written as Parquet files to the silver bucket. DuckDB only
+      # keeps a view over each file.
+      +materialized: external
+      +format: parquet

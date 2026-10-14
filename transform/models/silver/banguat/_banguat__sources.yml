@@ -1,0 +1,32 @@
+version: 2
+
+sources:
+  - name: bronze_banguat
+    description: >
+      Data landed by the ingestion job from the Banco de Guatemala web
+      service, stored as Parquet in the bronze bucket exactly as received.
+    loaded_at_field: _ingested_at
+    freshness:
+      warn_after: {count: 2, period: day}
+      error_after: {count: 7, period: day}
+    tables:
+      - name: exchange_rates
+        description: >
+          Reference exchange rate of the quetzal against the US dollar, one
+          record per published day. Field names are the ones the source uses
+          and every value is text.
+        config:
+          external_location: "read_parquet('s3://{{ env_var('S3_BUCKET_BRONZE') }}/banguat/exchange_rates/parquet/*/*.parquet')"
+        columns:
+          - name: moneda
+            description: Currency code used by the source. 2 is the US dollar.
+          - name: fecha
+            description: Date of the rate, as dd/mm/yyyy.
+          - name: venta
+            description: Selling rate, in quetzales per unit of the currency.
+          - name: compra
+            description: Buying rate, in quetzales per unit of the currency.
+          - name: _source_file
+            description: Object in the bronze bucket holding the raw response the row was read from.
+          - name: _ingested_at
+            description: When the ingestion run that wrote the row started (UTC).

@@ -1,0 +1,20 @@
+quetzal_lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Scratch database. It only holds views over the Parquet files and the
+      # seeds; deleting it loses nothing, because the next run rebuilds it.
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'quetzal.duckdb') }}"
+      threads: 4
+      extensions:
+        - httpfs
+      secrets:
+        - type: s3
+          key_id: "{{ env_var('S3_ACCESS_KEY_ID') }}"
+          secret: "{{ env_var('S3_SECRET_ACCESS_KEY') }}"
+          region: "{{ env_var('S3_REGION') }}"
+          # DuckDB expects host:port here and the scheme as a separate flag.
+          endpoint: "{{ env_var('S3_ENDPOINT_URL') | replace('https://', '') | replace('http://', '') }}"
+          use_ssl: "{{ env_var('S3_ENDPOINT_URL').startswith('https://') | as_bool }}"
+          url_style: path

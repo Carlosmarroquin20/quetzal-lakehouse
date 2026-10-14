@@ -8,6 +8,12 @@
 __pycache__/
 .pytest_cache/
 
+# dbt
+target/
+dbt_packages/
+logs/
+*.duckdb
+
 # Editor and OS files
 .vscode/
 .idea/
