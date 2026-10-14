@@ -1,0 +1,50 @@
+version: 2
+
+sources:
+  - name: bronze_minfin
+    description: >
+      Budget execution workbooks published by the Ministerio de Finanzas
+      Públicas. Its portal does not serve them to automated clients, so they
+      are downloaded by hand and loaded from a landing folder. Stored in the
+      bronze bucket as Parquet, every cell as text, one partition per fiscal
+      year. Published under CC BY 4.0.
+    loaded_at_field: _ingested_at
+    # The ministry updates the current year about once a month, and someone
+    # has to download it.
+    freshness:
+      warn_after: {count: 35, period: day}
+      error_after: {count: 70, period: day}
+    tables:
+      - name: central_government_expenditure
+        description: >
+          Execution of the central government's expenditure budget, one row
+          per budget line and fiscal year. A budget line is a combination of
+          fifteen classification codes. Amounts are accumulated from the
+          start of the fiscal year to the day the ministry produced the file.
+        config:
+          external_location: "read_parquet('s3://{{ env_var('S3_BUCKET_BRONZE') }}/minfin/central_government_expenditure/parquet/*/*.parquet')"
+        columns:
+          - name: id
+            description: Row number in the workbook.
+          - name: ejercicio
+            description: Fiscal year.
+          - name: codigoEntidad
+            description: Code of the budget entity in the institutional classifier.
+          - name: asignado
+            description: Budget approved for the year, in quetzales.
+          - name: modificado
+            description: Net changes made to the approved budget, in quetzales.
+          - name: vigente
+            description: Current budget, approved plus changes, in quetzales.
+          - name: preComprometido
+            description: Amount reserved for purchases being prepared, in quetzales.
+          - name: comprometido
+            description: Amount committed through contracts or orders, in quetzales.
+          - name: devengado
+            description: Amount accrued, for goods and services received, in quetzales.
+          - name: pagado
+            description: Amount paid, in quetzales.
+          - name: _source_file
+            description: Object in the bronze bucket holding the original workbook the row was read from.
+          - name: _ingested_at
+            description: When the ingestion run that wrote the row started (UTC).

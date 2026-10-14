@@ -1,0 +1,229 @@
+version: 2
+
+models:
+  - name: stg_minfin__central_government_expenditure
+    description: >
+      Execution of the central government's expenditure budget, one row per
+      budget line and fiscal year, typed and with English names. A budget
+      line is the combination of the fifteen classification codes: entity,
+      executing unit, program, subprogram, project, activity, work,
+      department, municipality, budget type, expenditure item, economic
+      class, funding source, lending organism and a correlative. The amounts
+      of a year accumulate from its start to the day the ministry produced
+      the file: final for a closed year, partial for the current one. Values
+      are kept as published.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          name: one_row_per_budget_line_and_year
+          arguments:
+            combination_of_columns:
+              - fiscal_year
+              - entity_code
+              - executing_unit_code
+              - program_code
+              - subprogram_code
+              - project_code
+              - activity_code
+              - work_code
+              - department_code
+              - municipality_code
+              - budget_type_code
+              - expenditure_item_code
+              - economic_code
+              - funding_source_code
+              - organism_code
+              - correlative
+      - dbt_utils.equal_rowcount:
+          name: silver_keeps_every_bronze_budget_line
+          arguments:
+            compare_model: source('bronze_minfin', 'central_government_expenditure')
+      - dbt_utils.expression_is_true:
+          name: current_budget_is_initial_budget_plus_changes
+          arguments:
+            expression: "current_budget = initial_budget + budget_changes"
+      - dbt_utils.expression_is_true:
+          name: paid_never_exceeds_accrued
+          arguments:
+            expression: "paid <= accrued"
+      - dbt_utils.expression_is_true:
+          name: entity_code_has_eight_digits
+          arguments:
+            expression: "regexp_full_match(entity_code, '\\d{8}')"
+    columns:
+      - name: fiscal_year
+        description: Fiscal year of the budget.
+        data_tests:
+          - not_null
+      - name: entity_code
+        description: >
+          Code of the budget entity in the institutional classifier of the
+          public sector, as eight digits. Shared with the entity codes of
+          Guatecompras.
+        data_tests:
+          - not_null
+      - name: entity_name
+        description: Official name of the budget entity.
+        data_tests:
+          - not_null
+      - name: executing_unit_code
+        description: Executing unit inside the entity.
+        data_tests:
+          - not_null
+      - name: executing_unit_name
+        description: Name of the executing unit.
+      - name: program_code
+        description: Budget program. Codes are only unique within an entity.
+        data_tests:
+          - not_null
+      - name: program_name
+        description: Name of the program.
+      - name: subprogram_code
+        description: Subprogram inside the program.
+      - name: subprogram_name
+        description: Name of the subprogram.
+      - name: project_code
+        description: Project inside the subprogram.
+      - name: project_name
+        description: Name of the project.
+      - name: activity_code
+        description: Activity inside the project.
+      - name: activity_name
+        description: Name of the activity.
+      - name: work_code
+        description: Public work the line pays for, 0 when there is none.
+      - name: work_name
+        description: Name of the work.
+      - name: department_code
+        description: Department where the money is spent.
+        data_tests:
+          - not_null
+      - name: department_name
+        description: Name of the department.
+      - name: municipality_code
+        description: Municipality where the money is spent. Unique across departments.
+        data_tests:
+          - not_null
+      - name: municipality_name
+        description: Name of the municipality.
+      - name: budget_type_code
+        description: Budget type (operating, investment or debt).
+        data_tests:
+          - not_null
+      - name: budget_type_name
+        description: Name of the budget type, in Spanish.
+      - name: expenditure_group_code
+        description: Group of the object-of-expenditure classifier, for example 200 for materials and supplies.
+        data_tests:
+          - not_null
+      - name: expenditure_group_name
+        description: Name of the expenditure group, in Spanish.
+      - name: expenditure_subgroup_code
+        description: Subgroup of the object-of-expenditure classifier.
+        data_tests:
+          - not_null
+      - name: expenditure_subgroup_name
+        description: Name of the expenditure subgroup, in Spanish.
+      - name: expenditure_item_code
+        description: Expenditure item ("renglón"), the most detailed level of the object-of-expenditure classifier.
+        data_tests:
+          - not_null
+      - name: expenditure_item_name
+        description: Name of the expenditure item, in Spanish.
+      - name: economic_code
+        description: Economic classification of the expenditure.
+        data_tests:
+          - not_null
+      - name: economic_name
+        description: Name of the economic class, in Spanish.
+      - name: funding_source_code
+        description: Source of the money (taxes, loans, donations...).
+        data_tests:
+          - not_null
+      - name: funding_source_name
+        description: Name of the funding source, in Spanish.
+      - name: organism_code
+        description: Lending or donor organism, 0 when there is none.
+        data_tests:
+          - not_null
+      - name: organism_name
+        description: Name of the organism.
+      - name: correlative
+        description: Number that tells apart lines sharing every other code.
+        data_tests:
+          - not_null
+      - name: initial_budget
+        description: Budget approved for the year ("asignado"), in quetzales.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: budget_changes
+        description: Net changes to the approved budget during the year ("modificado"), in quetzales. Can be negative.
+        data_tests:
+          - not_null
+      - name: current_budget
+        description: Approved budget plus changes ("vigente"), in quetzales.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: pre_committed
+        description: Amount reserved for purchases being prepared ("precomprometido"), in quetzales.
+        data_tests:
+          - not_null
+      - name: committed
+        description: Amount committed through contracts or purchase orders ("comprometido"), in quetzales.
+        data_tests:
+          - not_null
+      - name: accrued
+        description: Amount accrued for goods and services received ("devengado"), in quetzales. The usual measure of what was spent.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: paid
+        description: Amount paid ("pagado"), in quetzales.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: source_file
+        description: Object in the bronze bucket holding the original workbook the row came from.
+      - name: ingested_at
+        description: When the ingestion run that loaded the row started (UTC).
+
+unit_tests:
+  - name: workbook_text_becomes_typed_budget_values
+    description: Codes become integers, the entity code stays as text, and amounts become exact decimals.
+    model: stg_minfin__central_government_expenditure
+    given:
+      - input: source('bronze_minfin', 'central_government_expenditure')
+        format: sql
+        rows: |
+          select
+              '1' as id, '2026' as ejercicio, '11130099' as codigoEntidad, 'MINISTERIO DE EJEMPLO' as entidad,
+              '201' as codigoUnidadEjecutora, 'UNIDAD DE EJEMPLO' as unidadEjecutora,
+              '11' as codigoPrograma, 'PROGRAMA' as programa, '0' as codigoSubProg, 'SIN SUBPROGRAMA' as subPrograma,
+              '0' as codigoProyecto, 'SIN PROYECTO' as proyecto, '1' as codigoActividad, 'ACTIVIDAD' as actividad,
+              '0' as codigoObra, 'NA' as obra, '100' as codigoDepto, 'GUATEMALA' as departamento,
+              '101' as codigoMunicipio, 'GUATEMALA' as municipio, '11' as codigoTipoPresupuesto, 'FUNCIONAMIENTO' as tipoPresupuesto,
+              '100' as codigoGrupoGasto, 'SERVICIOS NO PERSONALES' as grupoGasto, '120' as codigoSubGrpGasto, 'IMPRESIONES' as subGrupoGasto,
+              '122' as codigoRenglon, 'IMPRESION' as renglon, '2111200' as codigoEconomico, 'Bienes y servicios' as economico,
+              '11' as codigoFuente, 'INGRESOS CORRIENTES' as fuente, '0' as codigoOrganismo, 'SIN ORGANISMO' as organismo,
+              '0' as correlativo, '2000' as asignado, '-150.25' as modificado, '1849.75' as vigente,
+              '0' as preComprometido, '1600' as comprometido, '1500.5' as devengado, '1500.5' as pagado,
+              'example.xlsx' as _source_file, timestamptz '2026-10-13 12:00:00+00' as _ingested_at
+    expect:
+      rows:
+        - fiscal_year: 2026
+          entity_code: "11130099"
+          executing_unit_code: 201
+          expenditure_item_code: 122
+          initial_budget: 2000.00
+          budget_changes: -150.25
+          current_budget: 1849.75
+          accrued: 1500.50
