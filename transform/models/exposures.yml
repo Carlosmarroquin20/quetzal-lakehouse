@@ -1,0 +1,37 @@
+version: 2
+
+# Who consumes gold. Declared here so the lineage graph runs from the sources
+# to the analyses, and so a change to a model shows what it would affect.
+exposures:
+  - name: budget_and_procurement_by_entity
+    label: Budget and procurement by entity
+    type: analysis
+    maturity: medium
+    url: https://github.com/Carlosmarroquin20/quetzal-lakehouse#budget-execution-1
+    description: >
+      Accrued budget against valid awards, per budget entity and year, as in
+      the example of the README. It is the analysis that the shared entity
+      dimension exists for.
+    depends_on:
+      - ref('fct_budget_execution')
+      - ref('fct_awards')
+      - ref('dim_buyer')
+      - ref('dim_entity')
+      - ref('dim_date')
+    owner:
+      name: Carlosmarroquin20
+
+  - name: awards_in_dollars
+    label: Awards in dollars per year
+    type: analysis
+    maturity: medium
+    url: https://github.com/Carlosmarroquin20/quetzal-lakehouse#awards
+    description: >
+      Valid awards per year in quetzales and in US dollars, converted with the
+      exchange rate of the day of each award.
+    depends_on:
+      - ref('fct_awards')
+      - ref('fct_exchange_rates')
+      - ref('dim_date')
+    owner:
+      name: Carlosmarroquin20

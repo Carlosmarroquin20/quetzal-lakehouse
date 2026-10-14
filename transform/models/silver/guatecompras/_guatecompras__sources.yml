@@ -7,6 +7,15 @@ sources:
       the public procurement system of Guatemala, stored as Parquet in the
       bronze bucket. Published under CC BY 4.0.
     loaded_at_field: _ingested_at
+    config:
+      meta:
+        owner: Ministerio de Finanzas Públicas (Guatecompras)
+        origin: "monthly OCDS files https://ocds.guatecompras.gt/file/json/YYYY/M"
+        loaded_by: "ingestion job contracting-processes (Airflow task ingest_contracting_processes)"
+        raw_files: "bronze bucket, guatecompras/contracting_processes/raw/year=YYYY/month=MM/"
+        refresh: daily
+        license: CC BY 4.0
+        personal_data: "yes: names, tax numbers, emails, phones and addresses of people"
     freshness:
       warn_after: {count: 2, period: day}
       error_after: {count: 7, period: day}

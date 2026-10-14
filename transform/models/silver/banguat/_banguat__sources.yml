@@ -6,6 +6,14 @@ sources:
       Data landed by the ingestion job from the Banco de Guatemala web
       service, stored as Parquet in the bronze bucket exactly as received.
     loaded_at_field: _ingested_at
+    config:
+      meta:
+        owner: Banco de Guatemala
+        origin: "SOAP web service https://www.banguat.gob.gt/variables/ws/TipoCambio.asmx, operation TipoCambioRango"
+        loaded_by: "ingestion job exchange-rates (Airflow task ingest_exchange_rates)"
+        raw_files: "bronze bucket, banguat/exchange_rates/raw/year=YYYY/response.xml"
+        refresh: daily
+        personal_data: none
     freshness:
       warn_after: {count: 2, period: day}
       error_after: {count: 7, period: day}

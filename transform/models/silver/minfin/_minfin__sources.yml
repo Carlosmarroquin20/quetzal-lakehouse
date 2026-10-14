@@ -7,8 +7,18 @@ sources:
       Públicas. Its portal does not serve them to automated clients, so they
       are downloaded by hand and loaded from a landing folder. Stored in the
       bronze bucket as Parquet, every cell as text, one partition per fiscal
-      year. Published under CC BY 4.0.
+      year. The 2025 dataset is published under CC BY; the 2026 dataset does
+      not state a license yet.
     loaded_at_field: _ingested_at
+    config:
+      meta:
+        owner: Ministerio de Finanzas Públicas
+        origin: "XLSX workbooks of https://datos.minfin.gob.gt, downloaded by hand into landing/minfin/"
+        loaded_by: "ingestion job budget-execution (Airflow task ingest_budget_execution)"
+        raw_files: "bronze bucket, minfin/central_government_expenditure/raw/year=YYYY/budget_execution.xlsx"
+        refresh: "when someone downloads a new workbook"
+        license: CC BY (2025); not stated (2026)
+        personal_data: none
     # The ministry updates the current year about once a month, and someone
     # has to download it.
     freshness:
