@@ -62,3 +62,121 @@ models:
           - unique
       - name: currency_name
         description: Name of the currency in English.
+
+  - name: fct_exchange_rates
+    description: >
+      Daily exchange rate of each currency against the quetzal. The grain is
+      one row per currency and calendar day, from the first to the last day
+      the source published a rate. Days the source skipped are filled with the
+      last rate published before them and flagged with is_published = false,
+      so any other fact can convert an amount on its own date with a plain
+      join. Rates are not additive: they can be averaged over time, never
+      summed.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          name: fct_exchange_rates_one_row_per_day_and_currency
+          arguments:
+            combination_of_columns: [date_key, currency_key]
+      - dbt_utils.expression_is_true:
+          name: reference_rate_lies_between_buy_and_sell
+          arguments:
+            expression: "reference_rate between least(buy_rate, sell_rate) and greatest(buy_rate, sell_rate)"
+      - dbt_utils.expression_is_true:
+          name: published_days_carry_their_own_rate
+          description: On a published day the rate used is the one published that day.
+          arguments:
+            expression: "strftime(rate_published_date, '%Y%m%d')::integer = date_key"
+          config:
+            where: "is_published"
+    columns:
+      - name: date_key
+        description: Day the rate applies to. Foreign key to dim_date.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: currency_key
+        description: Currency being priced. Foreign key to dim_currency.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_currency')
+                field: currency_key
+      - name: buy_rate
+        description: Buying rate, in quetzales per unit of the currency.
+        data_tests:
+          - not_null
+      - name: sell_rate
+        description: Selling rate, in quetzales per unit of the currency.
+        data_tests:
+          - not_null
+      - name: reference_rate
+        description: >
+          Rate to use when converting amounts: the midpoint of the buying and
+          selling rates, in quetzales per unit of the currency. Since
+          2006-12-02 the source publishes one rate in both fields, so the
+          midpoint is that published rate. Before that date it is a computed
+          value.
+        data_tests:
+          - not_null
+      - name: is_published
+        description: >
+          True when the source published a rate for the day. False on the
+          days it skipped, whose rates are carried over from the last
+          published day.
+        data_tests:
+          - not_null
+      - name: rate_published_date
+        description: >
+          Day on which the rate in this row was published. Equal to the row's
+          own day when is_published is true, and an earlier day otherwise.
+        data_tests:
+          - not_null
+
+unit_tests:
+  - name: skipped_days_take_the_last_published_rate
+    description: >
+      A calendar day without a published rate gets the rate of the last
+      published day and is flagged, and the reference rate is the midpoint of
+      buying and selling rates.
+    model: fct_exchange_rates
+    given:
+      - input: ref('stg_banguat__exchange_rates')
+        rows:
+          - {rate_date: 2000-04-01, currency_code: USD, buy_rate: 7.711940, sell_rate: 7.721870}
+          - {rate_date: 2000-04-03, currency_code: USD, buy_rate: 7.711340, sell_rate: 7.721381}
+      - input: ref('dim_date')
+        rows:
+          - {date_key: 20000401, date_day: 2000-04-01}
+          - {date_key: 20000402, date_day: 2000-04-02}
+          - {date_key: 20000403, date_day: 2000-04-03}
+          - {date_key: 20000404, date_day: 2000-04-04}
+      - input: ref('dim_currency')
+        rows:
+          - {currency_key: usd-key, currency_code: USD}
+    expect:
+      rows:
+        - date_key: 20000401
+          currency_key: usd-key
+          buy_rate: 7.711940
+          sell_rate: 7.721870
+          reference_rate: 7.7169050
+          is_published: true
+          rate_published_date: 2000-04-01
+        - date_key: 20000402
+          currency_key: usd-key
+          buy_rate: 7.711940
+          sell_rate: 7.721870
+          reference_rate: 7.7169050
+          is_published: false
+          rate_published_date: 2000-04-01
+        - date_key: 20000403
+          currency_key: usd-key
+          buy_rate: 7.711340
+          sell_rate: 7.721381
+          reference_rate: 7.7163605
+          is_published: true
+          rate_published_date: 2000-04-03
