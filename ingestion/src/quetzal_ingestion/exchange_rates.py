@@ -10,19 +10,15 @@ import argparse
 import io
 import logging
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 
 import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from quetzal_ingestion import banguat
+from quetzal_ingestion import banguat, runtime
 from quetzal_ingestion.storage import StorageSettings, create_s3_client
 
 DATASET = "banguat/exchange_rates"
-USER_AGENT = (
-    "quetzal-lakehouse (+https://github.com/Carlosmarroquin20/quetzal-lakehouse)"
-)
 
 # Every source field is stored as text: bronze does not interpret values.
 PARQUET_SCHEMA = pa.schema(
@@ -88,16 +84,11 @@ def ingest_year(
     return len(rows)
 
 
-def current_year() -> int:
-    # The job may run on a machine set to UTC, where the year changes six
-    # hours before it does in Guatemala.
-    return datetime.now(ZoneInfo("America/Guatemala")).year
-
-
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
-    this_year = current_year()
+    this_year = runtime.today_in_guatemala().year
     parser = argparse.ArgumentParser(
-        description="Land Banco de Guatemala exchange rates in the bronze layer."
+        prog="exchange-rates",
+        description="Land Banco de Guatemala exchange rates in the bronze layer.",
     )
     parser.add_argument(
         "--from-year",
@@ -120,20 +111,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
+    runtime.configure_logging()
     args = parse_args(argv)
     settings = StorageSettings.from_env()
     s3 = create_s3_client(settings)
     ingested_at = datetime.now(UTC)
 
-    # Connection failures are retried here. Anything else stops the run: a
-    # failed year leaves its previous partition intact and can be re-run.
-    transport = httpx.HTTPTransport(retries=2)
-    with httpx.Client(
-        transport=transport, timeout=30, headers={"User-Agent": USER_AGENT}
-    ) as http:
+    with runtime.create_http_client() as http:
         for year in range(args.from_year, args.to_year + 1):
             count = ingest_year(
                 year,
