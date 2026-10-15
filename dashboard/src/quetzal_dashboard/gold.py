@@ -2,8 +2,8 @@
 
 The dashboard opens one in-memory DuckDB database and gives it a view per gold
 table over the Parquet file dbt wrote, so queries name the tables the same way
-the dbt models and the README do. Nothing is copied: each query reads the
-files in the bucket, so the dashboard shows what the last dbt build wrote.
+the dbt models and the documentation do. Nothing is copied: each query reads
+the files in the bucket, so the dashboard shows what the last dbt build wrote.
 """
 
 import os

@@ -7,11 +7,11 @@ exposures:
     label: Budget and procurement by entity
     type: analysis
     maturity: medium
-    url: https://github.com/Carlosmarroquin20/quetzal-lakehouse#budget-execution-1
+    url: https://github.com/Carlosmarroquin20/quetzal-lakehouse/blob/main/docs/data-model.md#budget-execution-1
     description: >
       Accrued budget against valid awards, per budget entity and year, as in
-      the example of the README. It is the analysis that the shared entity
-      dimension exists for.
+      the example of the data model documentation. It is the analysis that
+      the shared entity dimension exists for.
     depends_on:
       - ref('fct_budget_execution')
       - ref('fct_awards')
@@ -25,7 +25,7 @@ exposures:
     label: Awards in dollars per year
     type: analysis
     maturity: medium
-    url: https://github.com/Carlosmarroquin20/quetzal-lakehouse#awards
+    url: https://github.com/Carlosmarroquin20/quetzal-lakehouse/blob/main/docs/data-model.md#awards
     description: >
       Valid awards per year in quetzales and in US dollars, converted with the
       exchange rate of the day of each award.
