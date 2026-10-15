@@ -93,8 +93,9 @@ services:
         s3.configure -user=transform-prod -buckets=$$SILVER,$$GOLD -actions=Read,Write,List -apply
         s3.configure -user=transform-dev -access_key=$$DEV_KEY -secret_key=$$DEV_SECRET -buckets=$$BRONZE -actions=Read,List -apply
         s3.configure -user=transform-dev -buckets=$$SILVER_DEV,$$GOLD_DEV -actions=Read,Write,List -apply
+        s3.configure -user=dashboard -access_key=$$DASHBOARD_KEY -secret_key=$$DASHBOARD_SECRET -buckets=$$GOLD -actions=Read,List -apply
         EOF
-        echo "identities applied: ingestion, transform-prod, transform-dev"
+        echo "identities applied: ingestion, transform-prod, transform-dev, dashboard"
     environment:
       BRONZE: ${S3_BUCKET_BRONZE}
       SILVER: ${S3_BUCKET_SILVER}
@@ -107,6 +108,8 @@ services:
       PROD_SECRET: ${S3_TRANSFORM_PROD_SECRET_ACCESS_KEY:?set S3_TRANSFORM_PROD_SECRET_ACCESS_KEY in .env}
       DEV_KEY: ${S3_TRANSFORM_DEV_ACCESS_KEY_ID:?set S3_TRANSFORM_DEV_ACCESS_KEY_ID in .env}
       DEV_SECRET: ${S3_TRANSFORM_DEV_SECRET_ACCESS_KEY:?set S3_TRANSFORM_DEV_SECRET_ACCESS_KEY in .env}
+      DASHBOARD_KEY: ${S3_DASHBOARD_ACCESS_KEY_ID:?set S3_DASHBOARD_ACCESS_KEY_ID in .env}
+      DASHBOARD_SECRET: ${S3_DASHBOARD_SECRET_ACCESS_KEY:?set S3_DASHBOARD_SECRET_ACCESS_KEY in .env}
     depends_on:
       storage:
         condition: service_healthy
