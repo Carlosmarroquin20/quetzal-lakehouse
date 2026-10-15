@@ -9,6 +9,10 @@ reads gold.
 Everything described here exists in the repository. Planned work is listed
 under [Status](#status).
 
+![The awards page of the dashboard, showing the valid awards of 2026 per month](docs/images/dashboard-awards.png)
+
+*The awards page of the dashboard, with the data loaded on 2026-10-14.*
+
 ## What it answers
 
 - How much the government awards each year, under which procedures and to
