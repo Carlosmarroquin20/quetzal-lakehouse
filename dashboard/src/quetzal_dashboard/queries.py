@@ -127,3 +127,98 @@ def awards_by_supplier_kind(con: duckdb.DuckDBPyConnection, year: int) -> pd.Dat
         """,
         {"year": year},
     ).df()
+
+
+def daily_rates(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    """The daily quetzal to US dollar rates, published or filled."""
+    return con.execute(
+        """
+        select
+            d.date_day,
+            f.reference_rate,
+            f.buy_rate,
+            f.sell_rate,
+            f.is_published,
+            f.rate_published_date
+        from fct_exchange_rates as f
+        inner join dim_date as d using (date_key)
+        inner join dim_currency as c using (currency_key)
+        where c.currency_code = 'USD'
+        order by d.date_day
+        """
+    ).df()
+
+
+def yearly_rates(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    """Average, lowest and highest reference rate per year, latest first."""
+    return con.execute(
+        """
+        select
+            d.year,
+            count(*) as days,
+            count(*) filter (where not f.is_published) as filled_days,
+            avg(f.reference_rate) as average_rate,
+            min(f.reference_rate) as lowest_rate,
+            max(f.reference_rate) as highest_rate
+        from fct_exchange_rates as f
+        inner join dim_date as d using (date_key)
+        inner join dim_currency as c using (currency_key)
+        where c.currency_code = 'USD'
+        group by d.year
+        order by d.year desc
+        """
+    ).df()
+
+
+def budget_years(con: duckdb.DuckDBPyConnection) -> list[int]:
+    """Fiscal years with budget execution data, most recent first."""
+    rows = con.execute(
+        "select distinct fiscal_year from fct_budget_execution order by fiscal_year desc"
+    ).fetchall()
+    return [year for (year,) in rows]
+
+
+def budget_by_entity(con: duckdb.DuckDBPyConnection, year: int) -> pd.DataFrame:
+    """Budget execution of each entity in a fiscal year, next to its valid awards.
+
+    Awards reach an entity through the buyer that made them. An entity whose
+    buyers awarded nothing that year has no awarded amount.
+    """
+    return con.execute(
+        """
+        with budget as (
+            select
+                entity_key,
+                sum(current_budget) as current_budget,
+                sum(accrued) as accrued,
+                sum(paid) as paid
+            from fct_budget_execution
+            where fiscal_year = $year
+            group by entity_key
+        ),
+
+        awards as (
+            select
+                b.entity_key,
+                sum(f.awarded_amount_gtq) as awarded
+            from fct_awards as f
+            inner join dim_buyer as b using (buyer_key)
+            inner join dim_date as d on d.date_key = f.award_date_key
+            where d.year = $year and not f.is_cancelled
+            group by b.entity_key
+        )
+
+        select
+            e.entity_name,
+            budget.current_budget,
+            budget.accrued,
+            budget.paid,
+            budget.accrued / nullif(budget.current_budget, 0) as execution_rate,
+            awards.awarded
+        from budget
+        inner join dim_entity as e using (entity_key)
+        left join awards using (entity_key)
+        order by budget.accrued desc
+        """,
+        {"year": year},
+    ).df()

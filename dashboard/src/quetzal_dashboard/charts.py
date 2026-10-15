@@ -59,3 +59,82 @@ def ranked_bars(data: pd.DataFrame, category: str, value: str, title: str) -> al
             ],
         )
     )
+
+
+# The second color, for the days the source did not publish. Text says what
+# they are, so the color is never the only cue.
+FILLED_COLOR = "#eb6834"
+
+
+def rate_line(data: pd.DataFrame) -> alt.LayerChart:
+    """The daily reference rate, with the days filled in gold marked."""
+    series = alt.Color(
+        "series:N",
+        title=None,
+        scale=alt.Scale(
+            domain=["Reference rate", "Day not published (filled)"],
+            range=[SERIES_COLOR, FILLED_COLOR],
+        ),
+        legend=alt.Legend(orient="top"),
+    )
+    hover = alt.selection_point(
+        fields=["date_day"], nearest=True, on="pointerover", empty=False
+    )
+    base = alt.Chart(data).encode(
+        x=alt.X("date_day:T", title=None, axis=alt.Axis(format="%Y", tickCount="year")),
+        y=alt.Y(
+            "reference_rate:Q",
+            title="Quetzales per US dollar",
+            scale=alt.Scale(zero=False),
+        ),
+        tooltip=[
+            alt.Tooltip("date_day:T", title="Day", format="%Y-%m-%d"),
+            alt.Tooltip("reference_rate:Q", title="Reference rate", format=".5f"),
+            alt.Tooltip("buy_rate:Q", title="Buying", format=".5f"),
+            alt.Tooltip("sell_rate:Q", title="Selling", format=".5f"),
+            alt.Tooltip(
+                "rate_published_date:T", title="Rate published on", format="%Y-%m-%d"
+            ),
+        ],
+    )
+    line = base.transform_calculate(series="'Reference rate'").mark_line(
+        strokeWidth=2
+    ).encode(color=series)
+    filled = (
+        base.transform_filter("!datum.is_published")
+        .transform_calculate(series="'Day not published (filled)'")
+        .mark_point(filled=True, size=64)
+        .encode(color=series)
+    )
+    # Invisible points pick the day nearest the pointer; a rule marks it.
+    pointer = base.mark_point(opacity=0).add_params(hover)
+    rule = base.mark_rule(color="gray").transform_filter(hover)
+    return alt.layer(line, filled, pointer, rule)
+
+
+def execution_bars(data: pd.DataFrame) -> alt.Chart:
+    """Share of the current budget accrued, per entity, highest first.
+
+    Expects the amounts already in millions of quetzales.
+    """
+    return (
+        alt.Chart(data)
+        .mark_bar(color=SERIES_COLOR, cornerRadiusEnd=4)
+        .encode(
+            y=alt.Y("entity_name:N", title=None, sort="-x", axis=alt.Axis(labelLimit=420)),
+            x=alt.X(
+                "execution_rate:Q",
+                title="Accrued, share of the current budget",
+                axis=alt.Axis(format="%"),
+                scale=alt.Scale(domain=[0, 1]),
+            ),
+            tooltip=[
+                alt.Tooltip("entity_name:N", title=""),
+                alt.Tooltip("execution_rate:Q", title="Accrued share", format=".1%"),
+                alt.Tooltip("accrued:Q", title="Accrued (million Q)", format=",.1f"),
+                alt.Tooltip(
+                    "current_budget:Q", title="Current budget (million Q)", format=",.1f"
+                ),
+            ],
+        )
+    )

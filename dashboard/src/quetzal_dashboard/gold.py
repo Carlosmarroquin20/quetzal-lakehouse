@@ -14,9 +14,14 @@ import duckdb
 # under a folder with the table's name.
 TABLES = (
     "dim_date",
+    "dim_currency",
+    "dim_buyer",
     "dim_supplier",
     "dim_procurement_method",
+    "dim_entity",
+    "fct_exchange_rates",
     "fct_awards",
+    "fct_budget_execution",
 )
 
 
