@@ -35,3 +35,28 @@ exposures:
       - ref('dim_date')
     owner:
       name: Carlosmarroquin20
+
+  - name: quetzal_dashboard
+    label: Quetzal lakehouse dashboard
+    type: dashboard
+    maturity: medium
+    url: http://localhost:8501
+    description: >
+      Streamlit dashboard over prod gold (the `dashboard` service of the
+      Compose stack), with three pages: awards per year, budget execution per
+      entity next to its awards, and the exchange rate. It reads gold with a
+      key pair that can only read the prod gold bucket, and shows natural
+      persons only as a group. The tables it reads are the views listed in
+      dashboard/src/quetzal_dashboard/gold.py.
+    depends_on:
+      - ref('fct_awards')
+      - ref('fct_budget_execution')
+      - ref('fct_exchange_rates')
+      - ref('dim_date')
+      - ref('dim_currency')
+      - ref('dim_buyer')
+      - ref('dim_supplier')
+      - ref('dim_procurement_method')
+      - ref('dim_entity')
+    owner:
+      name: Carlosmarroquin20

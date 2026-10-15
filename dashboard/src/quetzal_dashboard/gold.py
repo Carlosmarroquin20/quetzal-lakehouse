@@ -11,7 +11,9 @@ import os
 import duckdb
 
 # The gold tables the dashboard reads. Each one is a single Parquet file
-# under a folder with the table's name.
+# under a folder with the table's name. The exposure `quetzal_dashboard` in
+# transform/models/exposures.yml lists the same tables, so the dbt lineage
+# graph shows what a change to them would affect here.
 TABLES = (
     "dim_date",
     "dim_currency",
