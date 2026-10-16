@@ -113,6 +113,22 @@ of this repository, from which its tasks mount `landing/`.
    runs every day at 06:00, Guatemala time; the button to trigger it runs it
    now. A full run takes about twelve minutes.
 
+## Notifications with n8n
+
+n8n runs in its own profile and needs `N8N_ENCRYPTION_KEY` in `.env` (see
+`.env.example`).
+
+1. Start it and wait until it is healthy:
+
+   ```bash
+   docker compose --profile notifications up -d --wait
+   ```
+
+2. Open <http://localhost:5678>. The first time, n8n asks for an owner
+   account; it is stored only in n8n's volume on this machine.
+
+## Checking and stopping the stack
+
 To check how old the bronze data is:
 
 ```bash
@@ -122,14 +138,15 @@ docker compose run --rm transform source freshness
 The S3 endpoint is `http://localhost:8333`. Requests must be signed with the
 key pair from `.env`; unsigned requests and wrong keys are rejected.
 
-To stop the stack, including the documentation site, the dashboard and
-Airflow, and keep the data:
+To stop the stack, including the documentation site, the dashboard, Airflow
+and n8n, and keep the data:
 
 ```bash
-docker compose --profile docs --profile dashboard --profile airflow down
+docker compose --profile docs --profile dashboard --profile airflow --profile notifications down
 ```
 
-Adding `-v` also deletes the volumes, and with them every stored object.
+Adding `-v` also deletes the volumes, and with them every stored object and
+everything n8n stored.
 
 ## Development
 
