@@ -1,7 +1,7 @@
 {
   "id": "quetzalDigest001",
   "name": "Quetzal daily digest",
-  "active": true,
+  "active": false,
   "nodes": [
     {
       "parameters": {

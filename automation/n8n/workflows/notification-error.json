@@ -1,7 +1,7 @@
 {
   "id": "quetzalNotifyErr",
   "name": "Quetzal notification error",
-  "active": true,
+  "active": false,
   "nodes": [
     {
       "parameters": {},

@@ -42,6 +42,9 @@ def normalize(workflow: dict) -> dict:
         # Pinned data is a copy of real input, such as a whole digest.
         raise ValueError(f"{workflow['name']}: unpin the data of every node before exporting")
     kept = {key: workflow[key] for key in KEPT if key in workflow}
+    # Whether a workflow is published belongs to the instance, and import
+    # ignores the flag; import-workflows.sh publishes them.
+    kept["active"] = False
     for node in kept["nodes"]:
         for credential_type, reference in node.get("credentials", {}).items():
             if credential_type not in CREDENTIAL_IDS:

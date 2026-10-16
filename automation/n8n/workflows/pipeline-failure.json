@@ -1,7 +1,7 @@
 {
   "id": "quetzalFailure01",
   "name": "Quetzal pipeline failure",
-  "active": true,
+  "active": false,
   "nodes": [
     {
       "parameters": {

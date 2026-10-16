@@ -28,3 +28,7 @@ Thumbs.db
 
 # Files downloaded by hand, waiting to be loaded into bronze
 landing/
+
+# Temporary n8n export, before normalize_workflows.py; it holds the owner of
+# the instance.
+n8n-export/
