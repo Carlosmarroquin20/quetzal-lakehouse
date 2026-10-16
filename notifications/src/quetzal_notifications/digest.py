@@ -90,20 +90,36 @@ def award_totals(con: duckdb.DuckDBPyConnection, first_day: date, last_day: date
     return {"count": count, "total_gtq": _number(total_gtq), "total_usd": _number(total_usd)}
 
 
-def largest_awards(con: duckdb.DuckDBPyConnection, day: date) -> list[dict]:
-    """The largest valid awards of a day.
+def masked_supplier_totals(con: duckdb.DuckDBPyConnection, day: date) -> dict:
+    """Valid awards of a day to masked suppliers, as a group."""
+    count, total_gtq, total_usd = con.execute(
+        """
+        select
+            count(*),
+            coalesce(sum(f.awarded_amount_gtq), 0),
+            coalesce(sum(f.awarded_amount_usd), 0)
+        from fct_awards as f
+        inner join dim_supplier as s using (supplier_key)
+        where not f.is_cancelled and s.is_masked and f.award_date_key = $day
+        """,
+        {"day": _date_key(day)},
+    ).fetchone()
+    return {"count": count, "total_gtq": _number(total_gtq), "total_usd": _number(total_usd)}
 
-    The digest leaves the lakehouse, so it carries no more than gold shows
-    about a supplier. A masked supplier also loses the process identifier:
-    with it, anyone could look the process up in Guatecompras and read the
-    name gold hides.
+
+def largest_awards(con: duckdb.DuckDBPyConnection, day: date) -> list[dict]:
+    """The largest valid awards of a day to legal entities.
+
+    Masked suppliers are left out, as in the dashboard's ranking: the buyer,
+    the day and the amount of one award are enough to find its process in
+    Guatecompras and read the name gold hides. They are reported as a group
+    by masked_supplier_totals.
     """
     rows = con.execute(
         """
         select
-            case when not s.is_masked then f.ocid end as ocid,
+            f.ocid,
             s.supplier_name,
-            s.is_masked,
             b.buyer_name,
             m.procurement_procedure,
             f.awarded_amount_gtq,
@@ -112,7 +128,7 @@ def largest_awards(con: duckdb.DuckDBPyConnection, day: date) -> list[dict]:
         inner join dim_supplier as s using (supplier_key)
         inner join dim_buyer as b using (buyer_key)
         inner join dim_procurement_method as m using (procurement_method_key)
-        where not f.is_cancelled and f.award_date_key = $day
+        where not f.is_cancelled and not s.is_masked and f.award_date_key = $day
         order by f.awarded_amount_gtq desc, f.award_id
         limit $limit
         """,
@@ -122,13 +138,12 @@ def largest_awards(con: duckdb.DuckDBPyConnection, day: date) -> list[dict]:
         {
             "ocid": ocid,
             "supplier_name": supplier_name,
-            "supplier_is_masked": is_masked,
             "buyer_name": buyer_name,
             "procurement_procedure": procedure,
             "amount_gtq": _number(amount_gtq),
             "amount_usd": _number(amount_usd),
         }
-        for ocid, supplier_name, is_masked, buyer_name, procedure, amount_gtq, amount_usd in rows
+        for ocid, supplier_name, buyer_name, procedure, amount_gtq, amount_usd in rows
     ]
 
 
@@ -163,6 +178,7 @@ def build(
             "date": award_day.isoformat(),
             **award_totals(con, award_day, award_day),
             "year_to_date": award_totals(con, award_day.replace(month=1, day=1), award_day),
+            "masked_suppliers": masked_supplier_totals(con, award_day),
             "largest": largest_awards(con, award_day),
         },
         "row_counts": row_counts(con),

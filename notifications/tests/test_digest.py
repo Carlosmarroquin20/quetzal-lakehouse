@@ -69,6 +69,8 @@ def con() -> duckdb.DuckDBPyConnection:
             ('a4', 'ocds-4', 20261014, 'b-health', 's-beta', 'm-direct', false, '40.00', '5.24'),
             ('a5', 'ocds-5', 20261014, 'b-health', 's-beta', 'm-direct', false, '30.00', '3.93'),
             ('a6', 'ocds-6', 20261014, 'b-edu', 's-acme', 'm-direct', false, '20.00', '2.62'),
+            ('a11', 'ocds-11', 20261014, 'b-health', 's-acme', 'm-direct', false, '10.00', '1.31'),
+            ('a12', 'ocds-12', 20261014, 'b-edu', 's-beta', 'm-direct', false, '5.00', '0.65'),
             -- Cancelled: larger than any other award, and never counted.
             ('a7', 'ocds-7', 20261014, 'b-edu', 's-beta', 'm-tender', true, '99999.00', '13088.87'),
             -- Earlier in the year, and in the previous year.
@@ -124,28 +126,27 @@ def test_no_rate_on_or_before_the_day(con):
 
 def test_award_totals_count_valid_awards_only(con):
     assert digest.award_totals(con, AWARD_DAY, AWARD_DAY) == {
-        "count": 6,
-        "total_gtq": 1740.0,
-        "total_usd": 227.75,
+        "count": 8,
+        "total_gtq": 1755.0,
+        "total_usd": 229.71,
     }
 
 
 def test_year_to_date_starts_on_the_first_of_january(con):
     totals = digest.award_totals(con, date(2026, 1, 1), AWARD_DAY)
 
-    assert totals["count"] == 7
-    assert totals["total_gtq"] == 1840.0
+    assert totals["count"] == 9
+    assert totals["total_gtq"] == 1855.0
 
 
 def test_largest_awards_come_first_and_are_limited(con):
     largest = digest.largest_awards(con, AWARD_DAY)
 
     assert len(largest) == digest.LARGEST_AWARDS
-    assert [award["amount_gtq"] for award in largest] == [900.0, 700.0, 50.0, 40.0, 30.0]
-    assert largest[1] == {
+    assert [award["amount_gtq"] for award in largest] == [700.0, 40.0, 30.0, 20.0, 10.0]
+    assert largest[0] == {
         "ocid": "ocds-1",
         "supplier_name": "ACME, S.A.",
-        "supplier_is_masked": False,
         "buyer_name": "MINISTERIO DE SALUD",
         "procurement_procedure": "Licitación pública",
         "amount_gtq": 700.0,
@@ -153,14 +154,19 @@ def test_largest_awards_come_first_and_are_limited(con):
     }
 
 
-def test_masked_suppliers_cannot_be_traced_through_their_process(con):
-    masked = [a for a in digest.largest_awards(con, AWARD_DAY) if a["supplier_is_masked"]]
+def test_masked_suppliers_are_not_ranked_one_by_one(con):
+    largest = digest.largest_awards(con, AWARD_DAY)
 
-    assert [a["supplier_name"] for a in masked] == [
-        "Natural person",
-        "Supplier of unknown legal type",
-    ]
-    assert all(a["ocid"] is None for a in masked)
+    assert {award["supplier_name"] for award in largest} == {"ACME, S.A.", "BETA, S.A."}
+    assert "ocds-2" not in {award["ocid"] for award in largest}
+
+
+def test_masked_suppliers_are_reported_as_a_group(con):
+    assert digest.masked_supplier_totals(con, AWARD_DAY) == {
+        "count": 2,
+        "total_gtq": 950.0,
+        "total_usd": 124.34,
+    }
 
 
 def test_a_day_without_awards(con):
@@ -168,12 +174,13 @@ def test_a_day_without_awards(con):
 
     assert digest.award_totals(con, day, day) == {"count": 0, "total_gtq": 0, "total_usd": 0}
     assert digest.largest_awards(con, day) == []
+    assert digest.masked_supplier_totals(con, day)["count"] == 0
 
 
 def test_row_counts_of_the_fact_tables(con):
     assert digest.row_counts(con) == {
         "fct_exchange_rates": 6,
-        "fct_awards": 10,
+        "fct_awards": 12,
         "fct_budget_execution": 3,
     }
 
@@ -197,10 +204,15 @@ def test_the_payload_has_the_agreed_shape(con):
         "previous_date", "previous_rate", "change", "change_percent",
     }
     assert set(payload["awards"]) == {
-        "date", "count", "total_gtq", "total_usd", "year_to_date", "largest",
+        "date", "count", "total_gtq", "total_usd", "year_to_date", "masked_suppliers",
+        "largest",
     }
     assert payload["awards"]["date"] == "2026-10-14"
     assert set(payload["awards"]["year_to_date"]) == {"count", "total_gtq", "total_usd"}
+    assert set(payload["awards"]["masked_suppliers"]) == {"count", "total_gtq", "total_usd"}
+    assert set(payload["awards"]["largest"][0]) == {
+        "ocid", "supplier_name", "buyer_name", "procurement_procedure", "amount_gtq", "amount_usd",
+    }
     assert set(payload["row_counts"]) == set(digest.FACT_TABLES)
 
 
