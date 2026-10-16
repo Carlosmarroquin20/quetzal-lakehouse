@@ -85,6 +85,7 @@ def test_masked_suppliers_are_reported_as_a_group(con):
         "count": 2,
         "total_gtq": 950.0,
         "total_usd": 124.34,
+        "largest_gtq": 900.0,
     }
 
 
@@ -94,6 +95,7 @@ def test_a_day_without_awards(con):
     assert digest.award_totals(con, day, day) == {"count": 0, "total_gtq": 0, "total_usd": 0}
     assert digest.largest_awards(con, day) == []
     assert digest.masked_supplier_totals(con, day)["count"] == 0
+    assert digest.masked_supplier_totals(con, day)["largest_gtq"] is None
 
 
 def test_row_counts_of_the_fact_tables(con):
@@ -128,7 +130,9 @@ def test_the_payload_has_the_agreed_shape(con):
     }
     assert payload["awards"]["date"] == "2026-10-14"
     assert set(payload["awards"]["year_to_date"]) == {"count", "total_gtq", "total_usd"}
-    assert set(payload["awards"]["masked_suppliers"]) == {"count", "total_gtq", "total_usd"}
+    assert set(payload["awards"]["masked_suppliers"]) == {
+        "count", "total_gtq", "total_usd", "largest_gtq",
+    }
     assert set(payload["awards"]["largest"][0]) == {
         "ocid", "supplier_name", "buyer_name", "procurement_procedure", "amount_gtq", "amount_usd",
     }

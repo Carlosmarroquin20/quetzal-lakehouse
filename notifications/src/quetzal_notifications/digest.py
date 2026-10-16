@@ -91,20 +91,30 @@ def award_totals(con: duckdb.DuckDBPyConnection, first_day: date, last_day: date
 
 
 def masked_supplier_totals(con: duckdb.DuckDBPyConnection, day: date) -> dict:
-    """Valid awards of a day to masked suppliers, as a group."""
-    count, total_gtq, total_usd = con.execute(
+    """Valid awards of a day to masked suppliers, as a group.
+
+    The largest amount is there so that n8n can tell whether one of them
+    passes its alert threshold; the message says so without the amount.
+    """
+    count, total_gtq, total_usd, largest_gtq = con.execute(
         """
         select
             count(*),
             coalesce(sum(f.awarded_amount_gtq), 0),
-            coalesce(sum(f.awarded_amount_usd), 0)
+            coalesce(sum(f.awarded_amount_usd), 0),
+            max(f.awarded_amount_gtq)
         from fct_awards as f
         inner join dim_supplier as s using (supplier_key)
         where not f.is_cancelled and s.is_masked and f.award_date_key = $day
         """,
         {"day": _date_key(day)},
     ).fetchone()
-    return {"count": count, "total_gtq": _number(total_gtq), "total_usd": _number(total_usd)}
+    return {
+        "count": count,
+        "total_gtq": _number(total_gtq),
+        "total_usd": _number(total_usd),
+        "largest_gtq": _number(largest_gtq),
+    }
 
 
 def largest_awards(con: duckdb.DuckDBPyConnection, day: date) -> list[dict]:
