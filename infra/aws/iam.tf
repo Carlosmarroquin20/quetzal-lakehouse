@@ -24,6 +24,11 @@ locals {
       read        = ["gold"]
       read_write  = []
     }
+    notifications = {
+      description = "Daily digest for notifications: read prod gold."
+      read        = ["gold"]
+      read_write  = []
+    }
   }
 }
 

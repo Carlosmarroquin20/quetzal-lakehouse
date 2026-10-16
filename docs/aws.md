@@ -14,7 +14,7 @@ account.
 | Five S3 buckets | `<prefix>-bronze`, `-silver`, `-gold`, `-silver-dev` and `-gold-dev`, the same layout as the local stack. |
 | On every bucket | Public access blocked, object ACLs disabled, encryption with keys managed by S3, requests without TLS refused, and unfinished multipart uploads removed after seven days. |
 | On bronze only | Versioning, with previous versions kept for 90 days. |
-| Four IAM roles | `ingestion`, `transform-prod`, `transform-dev` and `dashboard`, each with the same access as its local identity, to be assumed by ECS tasks. |
+| Five IAM roles | `ingestion`, `transform-prod`, `transform-dev`, `dashboard` and `notifications`, each with the same access as its local identity, to be assumed by ECS tasks. |
 
 | Role | List and read | Write |
 |---|---|---|
@@ -22,6 +22,7 @@ account.
 | `transform-prod` | bronze, silver, gold | silver, gold |
 | `transform-dev` | bronze, silver-dev, gold-dev | silver-dev, gold-dev |
 | `dashboard` | gold | nothing |
+| `notifications` | gold | nothing |
 
 ## The same code on both
 
@@ -52,7 +53,7 @@ Terraform runs in a container, so neither has to be installed.
    docker compose --profile aws run --rm terraform apply -var-file=emulator.tfvars
    ```
 
-   The apply creates 34 resources and prints the bucket and role names. The
+   The apply creates 36 resources and prints the bucket and role names. The
    emulator keeps everything in memory, so restarting it starts over (delete
    `infra/aws/terraform.tfstate` too).
 
@@ -95,6 +96,9 @@ What was checked on 2026-10-15, with the role credentials of each job:
   gold.
 - The local stack, with key pairs, still runs as before: the full prod build
   ended with `PASS=223 ERROR=0`.
+- The `notifications` role, added afterwards, was created with read access
+  to gold only, and the emulator issued temporary credentials for it. The
+  digest itself was not run against the emulator.
 
 The emulator does not enforce IAM policies, so it does not prove that each
 role is limited to its buckets; the same rules were checked against
