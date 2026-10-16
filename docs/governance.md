@@ -3,8 +3,9 @@
 [Back to the README](../README.md)
 
 Natural persons are pseudonymized in gold, every job has a key pair that only
-reaches its own buckets, dbt runs in a dev and a prod environment, and the
-lineage from each source to its consumers is documented.
+reaches its own buckets, dbt runs in a dev and a prod environment, the
+lineage from each source to its consumers is documented, and the
+notifications that leave the lakehouse show no more than the dashboard does.
 
 ## Personal data
 
@@ -17,7 +18,8 @@ parties, as well as the members of award committees.
 |---|---|---|
 | Bronze | The files as published, with all of it. | Ingestion and both dbt environments. |
 | Silver | Only what a model uses: the supplier's tax number, name and legal type. Contact details and committee members are never read out of bronze, because the models list the fields they parse. | The dbt role of its environment. |
-| Gold | Natural persons pseudonymized: no tax number, no name. | Anyone who consumes the lakehouse. The dashboard reads it with a key pair that can read nothing else. |
+| Gold | Natural persons pseudonymized: no tax number, no name. | Anyone who consumes the lakehouse. The dashboard and the daily digest read it, each with its own key pair that can read nothing else. |
+| Notifications | A few figures of gold, sent to a Telegram chat and an email address outside the lakehouse. | Whoever receives them. |
 
 In `dim_supplier`, a natural person, and a supplier whose legal type is
 unknown, keeps no identifier and is named "Natural person" or "Supplier of
@@ -35,6 +37,17 @@ The dashboard shows masked suppliers only as a group. Its ranking of the
 suppliers awarded the most includes legal entities only: ranking masked
 suppliers one by one would single out individuals by their amounts, even
 without a name.
+
+The daily digest follows the same rules, and it is stricter because it
+leaves the lakehouse (see [Notifications](notifications.md)). Its largest
+awards are those to legal entities, with their process identifier; awards to
+masked suppliers appear as a number and a total. When one of them passes the
+alert threshold the message says so without the amount or the buyer: on real
+data the largest award of a day went to a natural person of a named
+municipality, and its buyer, day and amount were enough to find the process,
+and the name, in Guatecompras. The chat and the addresses that receive the
+messages are in `.env`, never in the exported workflows, and the export is
+checked for personal addresses before it is written.
 
 ## Design decisions
 
@@ -66,10 +79,23 @@ give could be a person, so it is masked like one.
 start by `storage-init`: ingestion can read and write bronze only; dbt in
 prod can read bronze and write prod silver and gold; dbt in dev can read
 bronze and write dev silver and gold, and cannot even read prod; the
-dashboard can read prod gold and nothing else. This is what
-the bucket per layer was chosen for in the first place. The administrator key
-is not used by any job. On AWS the same four roles are IAM roles with the
-same access and no long-lived keys; see [AWS](aws.md).
+dashboard can read prod gold and nothing else, and so can the daily digest,
+with a key pair of its own. This is what the bucket per layer was chosen for
+in the first place. The administrator key is not used by any job. On AWS the
+same five roles are IAM roles with the same access and no long-lived keys;
+see [AWS](aws.md).
+
+**The digest has its own role.** It reads exactly what the dashboard reads,
+and could have reused its key pair. A separate one means that each consumer
+of gold can be told apart in the store and revoked without stopping the
+other, and that a leak of the key in Airflow, where the digest task runs,
+does not expose the dashboard's.
+
+**Notifications carry their own secret.** The webhooks of n8n accept only
+requests with the secret shared in `NOTIFICATIONS_WEBHOOK_SECRET`. Airflow
+passes it to the digest task through `private_environment`, like the storage
+keys, and n8n keeps it as an encrypted credential. The Telegram token and the
+mail password exist only as n8n credentials, created by hand.
 
 **Two environments, one bronze.** Bronze is the same for both, because
 downloading the sources twice would add nothing. Silver and gold have a
@@ -82,8 +108,8 @@ shared buckets, for the same reason buckets were chosen per layer.
 **Lineage at three levels.** Each source declares where its data comes from,
 which job loads it, where the original files are, how often it refreshes and
 whether it holds personal data. dbt draws the graph from sources to models,
-and exposures declare the dashboard and the analyses that consume gold, so
-the graph shows what a change would affect. Each silver row keeps the bronze file it came
+and exposures declare the dashboard, the daily digest and the analyses that
+consume gold, so the graph shows what a change would affect. Each silver row keeps the bronze file it came
 from and when it was loaded. Emitting OpenLineage events to a Marquez server
 was left out: it would add services to a machine that already runs Airflow,
 for a graph dbt already draws.
