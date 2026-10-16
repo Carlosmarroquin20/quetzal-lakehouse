@@ -308,9 +308,45 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on: *after-init
 
+  n8n:
+    # Routes and formats notifications, at http://localhost:5678. It moves no
+    # data: Airflow runs the pipeline and posts what happened to n8n's
+    # webhooks. Start it with `docker compose --profile notifications up -d`.
+    # The tag is pinned because n8n releases often, and an upgrade can change
+    # how stored workflows behave.
+    image: n8nio/n8n:2.43.6
+    profiles: ["notifications"]
+    environment:
+      # Encrypts the credentials n8n stores, such as the bot token. Given here
+      # rather than generated into the volume, so the key is kept with the
+      # other secrets in .env instead of next to what it protects.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in .env}
+      GENERIC_TIMEZONE: America/Guatemala
+      TZ: America/Guatemala
+      # No usage statistics, no checks for new versions and no template
+      # gallery: n8n contacts only the services a workflow sends to.
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_TEMPLATES_ENABLED: "false"
+    ports:
+      # Published on loopback only, like the other interfaces.
+      - "127.0.0.1:5678:5678"
+    volumes:
+      # Workflows, credentials and execution history, in n8n's own SQLite
+      # database.
+      - n8n-data:/home/node/.n8n
+    healthcheck:
+      # The image has wget but not curl.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5678/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
   storage-data:
   transform-state:
   transform-state-dev:
   airflow-db-data:
   airflow-logs:
+  n8n-data:
