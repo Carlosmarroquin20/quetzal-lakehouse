@@ -90,7 +90,9 @@ def main(export_dir: Path, workflows_dir: Path) -> None:
     workflows_dir.mkdir(parents=True, exist_ok=True)
     for workflow_id, workflow in exported.items():
         target = workflows_dir / FILES[workflow_id]
-        target.write_text(json.dumps(workflow, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        target.write_text(
+            json.dumps(workflow, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+        )
         print(f"wrote {target}")
 
 
