@@ -3,7 +3,8 @@
 Airflow only schedules. Each task starts one of the project's images as a
 container, the same way `docker compose run` does: the three ingestion jobs
 land their sources in bronze, and once all of them succeed, dbt rebuilds
-silver and gold and runs the tests.
+silver and gold and runs the tests. The last task posts a digest of the new
+gold to n8n, which words it and sends it on.
 
 Every job is idempotent, so a failed task can simply run again. That is why
 retries live here and not inside the jobs.
@@ -20,6 +21,7 @@ from docker.types import Mount
 NETWORK = "quetzal-lakehouse_default"
 INGESTION_IMAGE = "quetzal-lakehouse-ingestion"
 TRANSFORM_IMAGE = "quetzal-lakehouse-transform"
+NOTIFICATIONS_IMAGE = "quetzal-lakehouse-notifications"
 
 # Configuration the containers need. Airflow runs the prod environment.
 STORAGE = {
@@ -44,6 +46,19 @@ TRANSFORM_SECRETS = {
     "S3_SECRET_ACCESS_KEY": os.environ.get("S3_TRANSFORM_PROD_SECRET_ACCESS_KEY", ""),
     "PSEUDONYMIZATION_KEY": os.environ.get("PSEUDONYMIZATION_KEY_PROD", ""),
 }
+# The digest reads prod gold with a key pair that can do nothing else, and
+# proves itself to n8n with the secret the webhooks check.
+NOTIFICATIONS_SECRETS = {
+    "S3_ACCESS_KEY_ID": os.environ.get("S3_NOTIFICATIONS_ACCESS_KEY_ID", ""),
+    "S3_SECRET_ACCESS_KEY": os.environ.get("S3_NOTIFICATIONS_SECRET_ACCESS_KEY", ""),
+    "NOTIFICATIONS_WEBHOOK_SECRET": os.environ.get("NOTIFICATIONS_WEBHOOK_SECRET", ""),
+}
+NOTIFICATIONS = {
+    "NOTIFICATIONS_WEBHOOK_URL": os.environ.get("NOTIFICATIONS_WEBHOOK_URL", ""),
+}
+# What the digest job exits with when no webhook URL is set: the task is then
+# skipped instead of failed, so the pipeline runs the same without n8n.
+DIGEST_NOT_CONFIGURED = 3
 
 # Guatecompras is loaded from this month on. Months the source has not changed
 # are skipped by their checksum, so the whole range costs little to refresh.
@@ -56,13 +71,16 @@ def job(
     command: list[str],
     secrets: dict[str, str],
     mounts: list[Mount] | None = None,
+    environment: dict[str, str] | None = None,
+    skip_on_exit_code: int | None = None,
 ) -> DockerOperator:
     return DockerOperator(
         task_id=task_id,
         image=image,
         command=command,
-        environment=STORAGE,
+        environment={**STORAGE, **(environment or {})},
         private_environment=secrets,
+        skip_on_exit_code=skip_on_exit_code,
         network_mode=NETWORK,
         mounts=mounts or [],
         # The operator would otherwise try to mount a temporary folder of the
@@ -129,4 +147,16 @@ with DAG(
         ],
     )
 
-    [exchange_rates, contracting_processes, budget_execution] >> dbt_build
+    # The day the digest reports on is the day of the run in Guatemala,
+    # which the job works out itself; the run ID lets a message be traced
+    # back to its run.
+    daily_digest = job(
+        "send_daily_digest",
+        NOTIFICATIONS_IMAGE,
+        ["digest", "--post", "--run-id", "{{ run_id }}"],
+        NOTIFICATIONS_SECRETS,
+        environment=NOTIFICATIONS,
+        skip_on_exit_code=DIGEST_NOT_CONFIGURED,
+    )
+
+    [exchange_rates, contracting_processes, budget_execution] >> dbt_build >> daily_digest

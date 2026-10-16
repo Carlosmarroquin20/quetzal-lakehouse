@@ -100,7 +100,7 @@ of this repository, from which its tasks mount `landing/`.
 1. Build the job images, which Airflow starts by name:
 
    ```bash
-   docker compose build ingestion transform
+   docker compose build ingestion transform notifications
    ```
 
 2. Start Airflow (about two minutes the first time):
