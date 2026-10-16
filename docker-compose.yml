@@ -378,6 +378,9 @@ services:
       # Workflows, credentials and execution history, in n8n's own SQLite
       # database.
       - n8n-data:/home/node/.n8n
+      # The versioned workflows and the script that imports them. Read-only:
+      # n8n keeps its working copy in its database.
+      - ./automation/n8n:/automation:ro
     healthcheck:
       # The image has wget but not curl.
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5678/healthz"]
