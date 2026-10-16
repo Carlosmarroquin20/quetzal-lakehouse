@@ -70,8 +70,8 @@
   local development.
 - Airflow reaches Docker through its socket, which gives it full control
   over Docker on this machine.
-- The DAG has no automated tests. It was checked by parsing it in Airflow
-  and by running it end to end.
+- The DAG itself has no automated tests; only its failure callback does. It
+  was checked by parsing it in Airflow and by running it end to end.
 - Everything shares one virtual machine of Docker Desktop. During one run a
   dbt build starved the Airflow scheduler for 36 seconds, Airflow declared it
   dead and killed the dbt task, and the retry succeeded. The scheduler now
@@ -89,6 +89,37 @@
   overall may include natural persons, which it shows only as a group.
 - The dashboard's pages have no automated tests; its queries do. The pages
   were checked by opening them against the data of 2026-10-14.
+
+## Notifications
+
+- The workflows were checked against stand-ins for Telegram and an SMTP
+  server, not against the real services. Delivery depends on the bot token
+  and mail account entered as n8n credentials.
+- If n8n is down, nothing is reported: the digest task fails after its
+  retries, and the alert about that failure cannot reach n8n either. Only
+  the Airflow interface shows it.
+- The error workflow cannot report when the recipients are not set, or when
+  both channels fail; the failed execution is only listed in n8n.
+- A failure alert is sent per failed task, so a run where the three
+  ingestion tasks fail sends three alerts.
+- That Airflow calls the failure callback once a task has used up its
+  retries was not seen in a real run; the callback was called inside the
+  Airflow scheduler and reached n8n.
+- The digest counts the awards dated the day before the run that
+  Guatecompras had published when the run loaded them, which may be fewer
+  than the source holds later. The exchange rate it reports is the latest
+  in gold up to that day.
+- Any n8n workflow can read every environment variable of the n8n
+  container, the encryption key included, because the workflows read their
+  settings from there.
+- One secret protects both webhooks. Changing it means changing `.env` and
+  the n8n credential together.
+- A workflow changed in the n8n interface stays different from the
+  repository until it is exported and normalized by hand, and running the
+  import script replaces such changes.
+- n8n runs its code task runner inside its own container, a mode n8n has
+  deprecated in favour of a separate runner, and it cannot run Python in
+  code nodes.
 
 ## AWS
 
