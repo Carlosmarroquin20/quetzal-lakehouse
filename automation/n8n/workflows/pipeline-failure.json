@@ -1,0 +1,217 @@
+{
+  "id": "quetzalFailure01",
+  "name": "Quetzal pipeline failure",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pipeline-failure",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8c2f1d3b-2e1a-4c52-8d22-1b2e3f405001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "6e4a9b63-7f2c-4d66-9a1f-2b3c4d5e6f01",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "quetzalWebhookCr",
+          "name": "Quetzal webhook secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// The alert names the task and the run, so both have to be there.\nconst body = $input.first().json.body;\n\nconst isNumber = (value) => typeof value === 'number' && Number.isFinite(value);\nconst isText = (value) => typeof value === 'string' && value.length > 0;\nconst isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);\nconst errors = [];\nconst expect = (ok, message) => { if (!ok) errors.push(message); };\n\nexpect(isObject(body), 'the body must be a JSON object');\nconst failure = isObject(body) ? body : {};\nexpect(failure.kind === 'pipeline_failure', 'kind must be \"pipeline_failure\"');\nexpect(failure.schema_version === 1, 'schema_version must be 1');\nfor (const field of ['dag_id', 'task_id', 'run_id', 'failed_at']) {\n  expect(isText(failure[field]), `${field} must be text`);\n}\nexpect(failure.error === null || typeof failure.error === 'string', 'error must be text or null');\n\nreturn [{ json: { valid: errors.length === 0, errors, failure } }];\n"
+      },
+      "id": "8c2f1d3b-2e1a-4c52-8d22-1b2e3f405002",
+      "name": "Validate payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.valid ? { status: 'accepted' } : { status: 'rejected', errors: $json.errors }) }}",
+        "options": {
+          "responseCode": "={{ $json.valid ? 200 : 400 }}"
+        }
+      },
+      "id": "8c2f1d3b-2e1a-4c52-8d22-1b2e3f405003",
+      "name": "Answer the webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { valid, failure } = $input.first().json;\nif (!valid) return [];\n\n// Settings come from the environment of the n8n container (see .env.example).\n// A missing one stops the workflow, and the error workflow reports it.\nconst setting = (name) => {\n  const value = $env[name];\n  if (value === undefined || value === '') throw new Error(`${name} is not set`);\n  return value;\n};\nconst numberSetting = (name) => {\n  const value = Number(setting(name));\n  if (!Number.isFinite(value)) throw new Error(`${name} must be a number`);\n  return value;\n};\nconst money = (value) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\nconst whole = (value) => value.toLocaleString('en-US');\n\nsetting('NOTIFICATIONS_TELEGRAM_CHAT_ID');\nsetting('NOTIFICATIONS_EMAIL_FROM');\nsetting('NOTIFICATIONS_EMAIL_TO');\nconst airflow = setting('NOTIFICATIONS_AIRFLOW_URL').replace(/\\/$/, '');\n\nconst failedAt = new Date(failure.failed_at).toLocaleString('en-US', {\n  timeZone: 'America/Guatemala', dateStyle: 'medium', timeStyle: 'short',\n});\nconst tries = failure.try_number ? ` after ${failure.try_number} tries` : '';\nconst log = `${airflow}/dags/${encodeURIComponent(failure.dag_id)}/runs/` +\n  `${encodeURIComponent(failure.run_id)}/tasks/${encodeURIComponent(failure.task_id)}`;\n\nconst lines = [\n  'Quetzal lakehouse - pipeline failure',\n  '',\n  `Task ${failure.task_id} of ${failure.dag_id} failed${tries}, on ${failedAt} (Guatemala).`,\n  `Run: ${failure.run_id}`,\n  `Error: ${failure.error ?? 'not given'}`,\n  '',\n  `Task log: ${log}`,\n];\nreturn [{ json: { subject: `Quetzal lakehouse: task ${failure.task_id} failed`, text: lines.join('\\n') } }];\n"
+      },
+      "id": "8c2f1d3b-2e1a-4c52-8d22-1b2e3f405004",
+      "name": "Format message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.NOTIFICATIONS_TELEGRAM_CHAT_ID }}",
+        "text": "={{ $('Format message').first().json.text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "notes": "Telegram reads the text as HTML, where only &, < and > need escaping. Without a mode the node uses Markdown, which rejects the underscore in a task name like dbt_build.",
+      "id": "8c2f1d3b-2e1a-4c52-8d22-1b2e3f405005",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "telegramApi": {
+          "id": "quetzalTelegramC",
+          "name": "Quetzal Telegram bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.NOTIFICATIONS_EMAIL_FROM }}",
+        "toEmail": "={{ $env.NOTIFICATIONS_EMAIL_TO }}",
+        "subject": "={{ $('Format message').first().json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $('Format message').first().json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "8c2f1d3b-2e1a-4c52-8d22-1b2e3f405006",
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "webhookId": "6e4a9b63-7f2c-4d66-9a1f-2b3c4d5e6f02",
+      "credentials": {
+        "smtp": {
+          "id": "quetzalSmtpCrede",
+          "name": "Quetzal SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Both channels are tried even when one fails, so one broken channel does\n// not silence the other. A failure is raised here, after both, and the error\n// workflow reports it.\nconst failures = [];\nfor (const node of ['Send to Telegram', 'Send email']) {\n  const error = $(node).first().json.error;\n  if (error) failures.push(`${node}: ${typeof error === 'string' ? error : JSON.stringify(error)}`);\n}\nif (failures.length) throw new Error(failures.join('; '));\nreturn [{ json: { delivered: true } }];\n"
+      },
+      "id": "8c2f1d3b-2e1a-4c52-8d22-1b2e3f405007",
+      "name": "Check delivery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate payload": {
+      "main": [
+        [
+          {
+            "node": "Answer the webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer the webhook": {
+      "main": [
+        [
+          {
+            "node": "Format message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format message": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        [
+          {
+            "node": "Check delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Guatemala",
+    "errorWorkflow": "quetzalNotifyErr"
+  },
+  "pinData": {},
+  "tags": []
+}

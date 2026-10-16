@@ -1,0 +1,217 @@
+{
+  "id": "quetzalDigest001",
+  "name": "Quetzal daily digest",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "daily-digest",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7b1e0c2a-1d0f-4b41-9c11-0a1d2e3f4001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "5d3f8a52-6e1b-4c55-8f0e-1a2b3c4d5e01",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "quetzalWebhookCr",
+          "name": "Quetzal webhook secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// A message built from a payload this workflow was not written for would be\n// wrong without anyone noticing, so the payload is checked first. The answer\n// to the webhook says what is wrong, and the Airflow task fails on it.\nconst body = $input.first().json.body;\n\nconst isNumber = (value) => typeof value === 'number' && Number.isFinite(value);\nconst isText = (value) => typeof value === 'string' && value.length > 0;\nconst isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);\nconst errors = [];\nconst expect = (ok, message) => { if (!ok) errors.push(message); };\n\nexpect(isObject(body), 'the body must be a JSON object');\nconst digest = isObject(body) ? body : {};\nexpect(digest.kind === 'daily_digest', 'kind must be \"daily_digest\"');\nexpect(digest.schema_version === 1, 'schema_version must be 1');\nexpect(isText(digest.run_date), 'run_date must be a date');\n\nconst rate = digest.exchange_rate;\nif (rate !== null) {\n  expect(isObject(rate), 'exchange_rate must be an object or null');\n  if (isObject(rate)) {\n    expect(isText(rate.date), 'exchange_rate.date must be a date');\n    expect(isNumber(rate.rate), 'exchange_rate.rate must be a number');\n    expect(typeof rate.is_published === 'boolean', 'exchange_rate.is_published must be true or false');\n    expect(rate.change === null || isNumber(rate.change), 'exchange_rate.change must be a number or null');\n    expect(rate.change_percent === null || isNumber(rate.change_percent), 'exchange_rate.change_percent must be a number or null');\n  }\n}\n\nconst awards = digest.awards;\nexpect(isObject(awards), 'awards must be an object');\nif (isObject(awards)) {\n  expect(isText(awards.date), 'awards.date must be a date');\n  for (const group of ['awards', 'awards.year_to_date', 'awards.masked_suppliers']) {\n    const totals = group === 'awards' ? awards : awards[group.split('.')[1]];\n    expect(isObject(totals), `${group} must be an object`);\n    if (isObject(totals)) {\n      for (const field of ['count', 'total_gtq', 'total_usd']) {\n        expect(isNumber(totals[field]), `${group}.${field} must be a number`);\n      }\n    }\n  }\n  if (isObject(awards.masked_suppliers)) {\n    const largest = awards.masked_suppliers.largest_gtq;\n    expect(largest === null || isNumber(largest), 'awards.masked_suppliers.largest_gtq must be a number or null');\n  }\n  expect(Array.isArray(awards.largest), 'awards.largest must be a list');\n  for (const [index, award] of (Array.isArray(awards.largest) ? awards.largest : []).entries()) {\n    expect(isText(award.supplier_name), `awards.largest[${index}].supplier_name must be text`);\n    expect(isText(award.buyer_name), `awards.largest[${index}].buyer_name must be text`);\n    expect(isNumber(award.amount_gtq), `awards.largest[${index}].amount_gtq must be a number`);\n  }\n}\n\nexpect(isObject(digest.row_counts), 'row_counts must be an object');\nfor (const [table, count] of Object.entries(isObject(digest.row_counts) ? digest.row_counts : {})) {\n  expect(isNumber(count), `row_counts.${table} must be a number`);\n}\n\nreturn [{ json: { valid: errors.length === 0, errors, digest } }];\n"
+      },
+      "id": "7b1e0c2a-1d0f-4b41-9c11-0a1d2e3f4002",
+      "name": "Validate payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.valid ? { status: 'accepted' } : { status: 'rejected', errors: $json.errors }) }}",
+        "options": {
+          "responseCode": "={{ $json.valid ? 200 : 400 }}"
+        }
+      },
+      "id": "7b1e0c2a-1d0f-4b41-9c11-0a1d2e3f4003",
+      "name": "Answer the webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// An invalid payload was already refused in the answer to the webhook.\nconst { valid, digest } = $input.first().json;\nif (!valid) return [];\n\n// Settings come from the environment of the n8n container (see .env.example).\n// A missing one stops the workflow, and the error workflow reports it.\nconst setting = (name) => {\n  const value = $env[name];\n  if (value === undefined || value === '') throw new Error(`${name} is not set`);\n  return value;\n};\nconst numberSetting = (name) => {\n  const value = Number(setting(name));\n  if (!Number.isFinite(value)) throw new Error(`${name} must be a number`);\n  return value;\n};\nconst money = (value) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\nconst whole = (value) => value.toLocaleString('en-US');\n\n// Checked here so that a missing recipient fails before anything is sent.\nsetting('NOTIFICATIONS_TELEGRAM_CHAT_ID');\nsetting('NOTIFICATIONS_EMAIL_FROM');\nsetting('NOTIFICATIONS_EMAIL_TO');\nconst rateThreshold = numberSetting('NOTIFICATIONS_RATE_CHANGE_ALERT_PERCENT');\nconst awardThreshold = numberSetting('NOTIFICATIONS_AWARD_ALERT_GTQ');\n\nconst rate = digest.exchange_rate;\nconst awards = digest.awards;\nconst signed = (value, digits) => (value > 0 ? '+' : '') + value.toFixed(digits);\n\nconst alerts = [];\nif (rate && rate.change_percent !== null && Math.abs(rate.change_percent) > rateThreshold) {\n  alerts.push(\n    `The dollar rate moved ${signed(rate.change_percent, 2)} % from ${rate.previous_date}, ` +\n    `more than the ${rateThreshold} % threshold.`\n  );\n}\nfor (const award of awards.largest.filter((a) => a.amount_gtq > awardThreshold)) {\n  alerts.push(`An award of Q${money(award.amount_gtq)} to ${award.supplier_name} is above Q${money(awardThreshold)}.`);\n}\n// Masked suppliers are never named or ranked, so the alert does not give the\n// amount either: with the buyer and the day it would point to the person.\nconst masked = awards.masked_suppliers;\nif (masked.largest_gtq !== null && masked.largest_gtq > awardThreshold) {\n  alerts.push(`At least one award to a masked supplier is above Q${money(awardThreshold)}; it is not detailed here.`);\n}\n\nconst lines = [`Quetzal lakehouse - daily digest of ${digest.run_date}`, ''];\nif (alerts.length) {\n  lines.push('ALERTS', ...alerts.map((alert) => `- ${alert}`), '');\n}\n\nlines.push('Exchange rate');\nif (rate) {\n  lines.push(`${rate.date}: Q${rate.rate.toFixed(5)} per US dollar.`);\n  if (rate.change !== null) {\n    lines.push(`Change from ${rate.previous_date}: ${signed(rate.change, 5)} (${signed(rate.change_percent, 2)} %).`);\n  }\n  if (!rate.is_published) {\n    lines.push(`The bank published no rate for this day; this is the rate of ${rate.rate_published_date}.`);\n  }\n} else {\n  lines.push('No exchange rate in gold up to this day.');\n}\nlines.push('');\n\nlines.push(`Awards of ${awards.date}`);\nlines.push(`${whole(awards.count)} valid awards, Q${money(awards.total_gtq)} (US$${money(awards.total_usd)}).`);\nlines.push(`Year to date: ${whole(awards.year_to_date.count)} awards, Q${money(awards.year_to_date.total_gtq)}.`);\nlines.push(\n  `To masked suppliers (natural persons or unknown legal type): ${whole(masked.count)} awards, ` +\n  `Q${money(masked.total_gtq)}.`\n);\nif (awards.largest.length) {\n  lines.push('', 'Largest awards to legal entities');\n  awards.largest.forEach((award, index) => {\n    lines.push(`${index + 1}. Q${money(award.amount_gtq)} - ${award.supplier_name}`);\n    lines.push(`   ${award.buyer_name}, ${award.procurement_procedure}, process ${award.ocid}`);\n  });\n}\nlines.push('');\n\nlines.push('Rows in gold');\nfor (const [table, count] of Object.entries(digest.row_counts)) {\n  lines.push(`${table}: ${whole(count)}`);\n}\nlines.push('', `Run: ${digest.run_id ?? 'not given'}`);\n\nconst subject = `Quetzal lakehouse: daily digest of ${digest.run_date}` + (alerts.length ? ' (alerts)' : '');\nreturn [{ json: { subject, text: lines.join('\\n'), alerts: alerts.length } }];\n"
+      },
+      "id": "7b1e0c2a-1d0f-4b41-9c11-0a1d2e3f4004",
+      "name": "Format message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.NOTIFICATIONS_TELEGRAM_CHAT_ID }}",
+        "text": "={{ $('Format message').first().json.text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "notes": "Telegram reads the text as HTML, where only &, < and > need escaping. Without a mode the node uses Markdown, which rejects the underscore in a task name like dbt_build.",
+      "id": "7b1e0c2a-1d0f-4b41-9c11-0a1d2e3f4005",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "telegramApi": {
+          "id": "quetzalTelegramC",
+          "name": "Quetzal Telegram bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.NOTIFICATIONS_EMAIL_FROM }}",
+        "toEmail": "={{ $env.NOTIFICATIONS_EMAIL_TO }}",
+        "subject": "={{ $('Format message').first().json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $('Format message').first().json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "7b1e0c2a-1d0f-4b41-9c11-0a1d2e3f4006",
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "webhookId": "5d3f8a52-6e1b-4c55-8f0e-1a2b3c4d5e02",
+      "credentials": {
+        "smtp": {
+          "id": "quetzalSmtpCrede",
+          "name": "Quetzal SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Both channels are tried even when one fails, so one broken channel does\n// not silence the other. A failure is raised here, after both, and the error\n// workflow reports it.\nconst failures = [];\nfor (const node of ['Send to Telegram', 'Send email']) {\n  const error = $(node).first().json.error;\n  if (error) failures.push(`${node}: ${typeof error === 'string' ? error : JSON.stringify(error)}`);\n}\nif (failures.length) throw new Error(failures.join('; '));\nreturn [{ json: { delivered: true } }];\n"
+      },
+      "id": "7b1e0c2a-1d0f-4b41-9c11-0a1d2e3f4007",
+      "name": "Check delivery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate payload": {
+      "main": [
+        [
+          {
+            "node": "Answer the webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer the webhook": {
+      "main": [
+        [
+          {
+            "node": "Format message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format message": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        [
+          {
+            "node": "Check delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Guatemala",
+    "errorWorkflow": "quetzalNotifyErr"
+  },
+  "pinData": {},
+  "tags": []
+}

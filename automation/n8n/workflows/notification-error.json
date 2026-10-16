@@ -1,0 +1,151 @@
+{
+  "id": "quetzalNotifyErr",
+  "name": "Quetzal notification error",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "9d3a2e4c-3f2b-4d63-9e33-2c3f40516003",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execution, workflow } = $input.first().json;\n\n// Settings come from the environment of the n8n container (see .env.example).\n// A missing one stops the workflow, and the error workflow reports it.\nconst setting = (name) => {\n  const value = $env[name];\n  if (value === undefined || value === '') throw new Error(`${name} is not set`);\n  return value;\n};\nconst numberSetting = (name) => {\n  const value = Number(setting(name));\n  if (!Number.isFinite(value)) throw new Error(`${name} must be a number`);\n  return value;\n};\nconst money = (value) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\nconst whole = (value) => value.toLocaleString('en-US');\n\nsetting('NOTIFICATIONS_TELEGRAM_CHAT_ID');\nsetting('NOTIFICATIONS_EMAIL_FROM');\nsetting('NOTIFICATIONS_EMAIL_TO');\n\nconst lines = [\n  'Quetzal lakehouse - a notification failed',\n  '',\n  `Workflow: ${workflow?.name ?? 'unknown'}`,\n  `Step: ${execution?.lastNodeExecuted ?? 'unknown'}`,\n  `Error: ${execution?.error?.message ?? 'not given'}`,\n];\nif (execution?.url) lines.push(`Execution: ${execution.url}`);\nreturn [{ json: { subject: `Quetzal lakehouse: notification failed in ${workflow?.name ?? 'a workflow'}`, text: lines.join('\\n') } }];\n"
+      },
+      "id": "9d3a2e4c-3f2b-4d63-9e33-2c3f40516004",
+      "name": "Format message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.NOTIFICATIONS_TELEGRAM_CHAT_ID }}",
+        "text": "={{ $('Format message').first().json.text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "notes": "Telegram reads the text as HTML, where only &, < and > need escaping. Without a mode the node uses Markdown, which rejects the underscore in a task name like dbt_build.",
+      "id": "9d3a2e4c-3f2b-4d63-9e33-2c3f40516001",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        440,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "telegramApi": {
+          "id": "quetzalTelegramC",
+          "name": "Quetzal Telegram bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.NOTIFICATIONS_EMAIL_FROM }}",
+        "toEmail": "={{ $env.NOTIFICATIONS_EMAIL_TO }}",
+        "subject": "={{ $('Format message').first().json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $('Format message').first().json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9d3a2e4c-3f2b-4d63-9e33-2c3f40516002",
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "webhookId": "7f5b0c74-8a3d-4e77-8b2a-3c4d5e6f7a01",
+      "credentials": {
+        "smtp": {
+          "id": "quetzalSmtpCrede",
+          "name": "Quetzal SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Both channels are tried even when one fails, so one broken channel does\n// not silence the other. A failure is raised here, after both, and the error\n// workflow reports it.\nconst failures = [];\nfor (const node of ['Send to Telegram', 'Send email']) {\n  const error = $(node).first().json.error;\n  if (error) failures.push(`${node}: ${typeof error === 'string' ? error : JSON.stringify(error)}`);\n}\nif (failures.length) throw new Error(failures.join('; '));\nreturn [{ json: { delivered: true } }];\n"
+      },
+      "id": "9d3a2e4c-3f2b-4d63-9e33-2c3f40516005",
+      "name": "Check delivery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format message": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        [
+          {
+            "node": "Check delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Guatemala"
+  },
+  "pinData": {},
+  "tags": []
+}
