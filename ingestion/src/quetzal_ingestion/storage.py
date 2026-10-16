@@ -10,25 +10,34 @@ from botocore.exceptions import ClientError
 
 @dataclass(frozen=True)
 class StorageSettings:
-    endpoint_url: str
     region: str
-    access_key_id: str
-    secret_access_key: str
     bronze_bucket: str
+    # Set for an S3-compatible store; left out for AWS S3 itself.
+    endpoint_url: str | None = None
+    # Set as a pair, or both left out. Without them boto3 finds credentials
+    # the standard AWS way, for example the IAM role of the container it runs
+    # in, so no long-lived key has to be handed to the job.
+    access_key_id: str | None = None
+    secret_access_key: str | None = None
 
     @classmethod
     def from_env(cls) -> "StorageSettings":
-        names = {
-            "endpoint_url": "S3_ENDPOINT_URL",
-            "region": "S3_REGION",
-            "access_key_id": "S3_ACCESS_KEY_ID",
-            "secret_access_key": "S3_SECRET_ACCESS_KEY",
-            "bronze_bucket": "S3_BUCKET_BRONZE",
-        }
-        missing = [name for name in names.values() if not os.environ.get(name)]
+        required = {"region": "S3_REGION", "bronze_bucket": "S3_BUCKET_BRONZE"}
+        missing = [name for name in required.values() if not os.environ.get(name)]
         if missing:
             raise RuntimeError(f"missing environment variables: {', '.join(missing)}")
-        return cls(**{field: os.environ[name] for field, name in names.items()})
+        key_id = os.environ.get("S3_ACCESS_KEY_ID") or None
+        secret = os.environ.get("S3_SECRET_ACCESS_KEY") or None
+        if (key_id is None) != (secret is None):
+            raise RuntimeError(
+                "set both S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, or neither"
+            )
+        return cls(
+            **{field: os.environ[name] for field, name in required.items()},
+            endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None,
+            access_key_id=key_id,
+            secret_access_key=secret,
+        )
 
 
 def create_s3_client(settings: StorageSettings):
@@ -38,9 +47,12 @@ def create_s3_client(settings: StorageSettings):
         region_name=settings.region,
         aws_access_key_id=settings.access_key_id,
         aws_secret_access_key=settings.secret_access_key,
-        # Address buckets as endpoint/bucket rather than bucket.endpoint, which
-        # a local store reached through a plain hostname cannot resolve.
-        config=Config(s3={"addressing_style": "path"}),
+        # A store reached through a plain hostname cannot resolve
+        # bucket.endpoint, so buckets are addressed as endpoint/bucket there.
+        # AWS S3 itself keeps its default addressing.
+        config=Config(
+            s3={"addressing_style": "path" if settings.endpoint_url else "auto"}
+        ),
     )
 
 

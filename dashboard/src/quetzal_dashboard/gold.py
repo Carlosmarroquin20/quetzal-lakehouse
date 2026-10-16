@@ -34,36 +34,45 @@ def _required(name: str) -> str:
     return value
 
 
+def create_s3_secret(con: duckdb.DuckDBPyConnection) -> None:
+    """Tell DuckDB how to reach the object store, from the environment.
+
+    S3_ENDPOINT_URL is set for an S3-compatible store and left out for AWS
+    S3. The key pair is set as a pair or not at all: without it DuckDB finds
+    credentials the standard AWS way, such as the IAM role of the container.
+    """
+    options: dict[str, object] = {"region": _required("S3_REGION")}
+    endpoint = os.environ.get("S3_ENDPOINT_URL")
+    if endpoint:
+        # DuckDB expects host:port here and the scheme as a separate flag. A
+        # store reached through a plain hostname needs path-style addresses.
+        options["endpoint"] = endpoint.removeprefix("https://").removeprefix("http://")
+        options["use_ssl"] = endpoint.startswith("https://")
+        options["url_style"] = "path"
+    key_id = os.environ.get("S3_ACCESS_KEY_ID")
+    secret = os.environ.get("S3_SECRET_ACCESS_KEY")
+    if bool(key_id) != bool(secret):
+        raise RuntimeError("set both S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, or neither")
+    if key_id:
+        provider = "config"
+        options["key_id"] = key_id
+        options["secret"] = secret
+    else:
+        # Given at all, even empty, a key would override what the chain finds.
+        provider = "credential_chain"
+    # Values are passed as parameters, so the key pair is never part of a SQL
+    # string that could end up in a log.
+    fields = "".join(f", {name} ${name}" for name in options)
+    con.execute(f"create secret s3 (type s3, provider {provider}{fields})", options)
+
+
 def connect() -> duckdb.DuckDBPyConnection:
     """Open a connection whose views read gold from the object store."""
-    endpoint = _required("S3_ENDPOINT_URL")
     bucket = _required("S3_BUCKET_GOLD")
 
     con = duckdb.connect()
     con.load_extension("httpfs")
-    # The key pair is passed as parameters, so it is never part of a SQL
-    # string that could end up in a log.
-    con.execute(
-        """
-        create secret gold (
-            type s3,
-            key_id $key_id,
-            secret $secret,
-            region $region,
-            endpoint $endpoint,
-            use_ssl $use_ssl,
-            url_style 'path'
-        )
-        """,
-        {
-            "key_id": _required("S3_ACCESS_KEY_ID"),
-            "secret": _required("S3_SECRET_ACCESS_KEY"),
-            "region": _required("S3_REGION"),
-            # DuckDB expects host:port here and the scheme as a separate flag.
-            "endpoint": endpoint.removeprefix("https://").removeprefix("http://"),
-            "use_ssl": endpoint.startswith("https://"),
-        },
-    )
+    create_s3_secret(con)
     for table in TABLES:
         con.execute(
             f"create view {table} as "

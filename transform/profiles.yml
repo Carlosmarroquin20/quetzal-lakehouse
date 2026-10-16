@@ -18,18 +18,12 @@ quetzal_lakehouse:
         preserve_insertion_order: false
       extensions:
         - httpfs
-      secrets:
-        - type: s3
-          key_id: "{{ env_var('S3_ACCESS_KEY_ID') }}"
-          secret: "{{ env_var('S3_SECRET_ACCESS_KEY') }}"
-          region: "{{ env_var('S3_REGION') }}"
-          # DuckDB expects host:port here and the scheme as a separate flag.
-          endpoint: "{{ env_var('S3_ENDPOINT_URL') | replace('https://', '') | replace('http://', '') }}"
-          use_ssl: "{{ env_var('S3_ENDPOINT_URL').startswith('https://') | as_bool }}"
-          url_style: path
-      # Registers pseudonymize() on every connection.
+      # Plugins run on every connection: s3_access creates the secret that
+      # reaches the object store, from the environment; pseudonymization
+      # registers pseudonymize().
       module_paths:
         - plugins
       plugins:
+        - module: s3_access
         - module: pseudonymization
     prod: *duckdb

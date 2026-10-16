@@ -22,9 +22,10 @@ RUN useradd --create-home transform \
 USER transform
 ENV DBT_DUCKDB_PATH=/app/state/quetzal.duckdb
 
-# The DuckDB extension and the dbt packages are downloaded here, at build
-# time, so that a run does not depend on those downloads.
-RUN python -c "import duckdb; duckdb.connect().install_extension('httpfs')"
+# The DuckDB extensions and the dbt packages are downloaded here, at build
+# time, so that a run does not depend on those downloads: httpfs reads S3,
+# and aws finds credentials the standard AWS way when no key pair is given.
+RUN python -c "import duckdb; c = duckdb.connect(); c.install_extension('httpfs'); c.install_extension('aws')"
 COPY --chown=transform dbt_project.yml packages.yml package-lock.yml ./
 RUN dbt deps
 

@@ -19,9 +19,10 @@ RUN uv sync --frozen --no-dev
 RUN useradd --create-home dashboard
 USER dashboard
 
-# The DuckDB extension that reads S3 is downloaded here, at build time, so
-# that starting the dashboard does not depend on that download.
-RUN python -c "import duckdb; duckdb.connect().install_extension('httpfs')"
+# The DuckDB extensions are downloaded here, at build time, so that starting
+# the dashboard does not depend on that download: httpfs reads S3, and aws
+# finds credentials the standard AWS way when no key pair is given.
+RUN python -c "import duckdb; c = duckdb.connect(); c.install_extension('httpfs'); c.install_extension('aws')"
 
 COPY --chown=dashboard app.py ./
 COPY --chown=dashboard views ./views
