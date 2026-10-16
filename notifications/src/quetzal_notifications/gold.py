@@ -11,7 +11,9 @@ import os
 
 import duckdb
 
-# The gold tables the digest reads.
+# The gold tables the digest reads. The exposure `daily_digest` in
+# transform/models/exposures.yml lists the same tables, so the dbt lineage
+# graph shows what a change to them would affect here.
 TABLES = (
     "dim_date",
     "dim_currency",

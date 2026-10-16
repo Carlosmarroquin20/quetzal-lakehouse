@@ -60,3 +60,29 @@ exposures:
       - ref('dim_entity')
     owner:
       name: Carlosmarroquin20
+
+  - name: daily_digest
+    label: Daily digest
+    type: application
+    maturity: medium
+    url: https://github.com/Carlosmarroquin20/quetzal-lakehouse/tree/main/notifications
+    description: >
+      Summary of each daily run (the `notifications` job of the Compose
+      stack): the latest dollar rate and its change, the valid awards of the
+      previous day and of the year so far, the largest awards to legal
+      entities, and the row counts of the fact tables. It leaves the
+      lakehouse in notifications, so it reads gold with its own key pair that
+      can only read the prod gold bucket, and shows natural persons only as
+      a group. The tables it reads are the views listed in
+      notifications/src/quetzal_notifications/gold.py.
+    depends_on:
+      - ref('fct_exchange_rates')
+      - ref('fct_awards')
+      - ref('fct_budget_execution')
+      - ref('dim_date')
+      - ref('dim_currency')
+      - ref('dim_buyer')
+      - ref('dim_supplier')
+      - ref('dim_procurement_method')
+    owner:
+      name: Carlosmarroquin20
