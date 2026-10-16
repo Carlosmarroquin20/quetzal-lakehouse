@@ -4,8 +4,9 @@ A lakehouse on public financial data from Guatemala: the central bank's
 exchange rate, public procurement and the central government's budget. Each
 source lands untouched in bronze, dbt and DuckDB turn it into typed silver
 tables and a star schema in gold, Airflow runs it every day, and a dashboard
-reads gold. Terraform describes the AWS storage and roles it would run on,
-tested against a local AWS emulator.
+reads gold. Each run ends with a digest sent to Telegram and by email through
+a self-hosted n8n, which also reports failures. Terraform describes the AWS
+storage and roles it would run on, tested against a local AWS emulator.
 
 Everything described here exists in the repository. Planned work is listed
 under [Status](#status).
@@ -39,14 +40,21 @@ under [Status](#status).
   lines, a daily exchange rate) sharing date, currency and entity dimensions,
   so budget and procurement can be compared entity by entity.
 - **Tests that encode what profiling found:** 195 dbt data tests and 8 unit
-  tests fail on new anomalies, not on the known ones; 67 ingestion tests and
-  13 dashboard tests cover the Python code.
+  tests fail on new anomalies, not on the known ones; 71 ingestion tests, 16
+  dashboard tests, 22 digest tests and 7 tests of the DAG's failure callback
+  cover the Python code.
 - **Governance:** natural persons are pseudonymized in gold with a keyed hash,
   each job has a storage key pair that reaches only its own buckets, dbt runs
   in separate dev and prod environments, and the lineage runs from each source
   to the dashboard.
 - **Runs on its own:** Airflow runs the whole pipeline every day at 06:00,
   Guatemala time.
+- **Notifications:** each run ends with a digest of gold (the dollar rate and
+  its change, the awards of the day before, the largest of them) sent to
+  Telegram and by email, with alerts above configurable thresholds; a task
+  that fails for good is reported at once. Airflow computes and posts, n8n
+  only words and routes the messages, behind a shared secret, and the
+  workflows are versioned in the repository.
 - **Infrastructure as code:** Terraform creates the AWS buckets, with
   encryption, blocked public access and versioned bronze, and one
   least-privilege IAM role per job. It has never been applied to an AWS
@@ -68,6 +76,8 @@ flowchart LR
         transform["transform job<br/>(dbt + DuckDB)"]
         docs["docs<br/>dbt documentation site<br/>127.0.0.1:8080"]
         dashboard["dashboard<br/>(Streamlit + DuckDB)<br/>127.0.0.1:8501"]
+        notifications["notifications job<br/>(daily digest)"]
+        n8n["n8n<br/>127.0.0.1:5678"]
         subgraph storage["storage: SeaweedFS S3 gateway, 127.0.0.1:8333"]
             bronze[("quetzal-bronze<br/>original files + Parquet<br/>partitioned by period")]
             silver[("quetzal-silver<br/>typed Parquet")]
@@ -84,8 +94,13 @@ flowchart LR
     transform -- "write, then test" --> gold
     transform -. "models, tests and lineage" .-> docs
     gold -- "read only" --> dashboard
+    gold -- "read only" --> notifications
     airflow -. "starts" .-> ingestion
     airflow -. "starts, after ingestion" .-> transform
+    airflow -. "starts, after dbt" .-> notifications
+    notifications -- "digest" --> n8n
+    airflow -- "failed task" --> n8n
+    n8n -- "messages" --> channels["Telegram<br/>and email"]
 ```
 
 ## Stack
@@ -97,6 +112,7 @@ flowchart LR
 | Transformation | dbt Core 1.12 with dbt-duckdb, DuckDB 1.5 |
 | Orchestration | Airflow 3.3 with the local executor and Postgres |
 | Dashboard | Streamlit with DuckDB |
+| Notifications | n8n 2.43 Community Edition, Telegram, SMTP |
 | Infrastructure | Terraform 1.16 with the AWS provider; Moto as the AWS emulator |
 | Runtime | Docker Compose |
 
@@ -106,8 +122,10 @@ flowchart LR
 |---|---|
 | `ingestion/` | The jobs that land each source in bronze, as one Python package with its tests. |
 | `transform/` | The dbt project: silver and gold models, tests, seeds and the pseudonymization plugin. |
-| `orchestration/dags/` | The Airflow DAG. |
+| `orchestration/` | The Airflow DAG and its failure callback, with the callback's tests. |
 | `dashboard/` | The Streamlit dashboard, its queries and their tests. |
+| `notifications/` | The job that computes the daily digest from gold and posts it, with its tests. |
+| `automation/n8n/` | The n8n workflows, the script that imports them, sample payloads and the script that normalizes an export. |
 | `infra/aws/` | The Terraform configuration of the AWS storage and roles. |
 | `docs/` | The documentation listed below. |
 | `docker-compose.yml` | Every service and job, with the storage roles. |
@@ -141,6 +159,7 @@ documentation site, Airflow and development.
 | [Data quality](docs/data-quality.md) | What profiling each source found, and the tests that encode it. |
 | [Governance](docs/governance.md) | Personal data and its masking, the storage roles, the two environments, and lineage. |
 | [Design decisions](docs/design-decisions.md) | Each decision, with the alternatives that were rejected. |
+| [Notifications](docs/notifications.md) | The daily digest and failure alerts: how they travel, the payloads, the settings and credentials, and how to try and change the workflows. |
 | [AWS](docs/aws.md) | The Terraform configuration, how to try it against the emulator, and what a deployment would add. |
 | [Known limitations](docs/known-limitations.md) | What the project does not handle, or handles only in part. |
 
@@ -148,8 +167,8 @@ documentation site, Airflow and development.
 
 Built, in this order: the choice of sources, the storage, the bronze, silver
 and gold layers for the exchange rate, procurement and the budget, the daily
-orchestration, governance, the dashboard, and the Terraform configuration of
-the AWS storage and roles.
+orchestration, governance, the dashboard, the Terraform configuration of the
+AWS storage and roles, and the notifications.
 
 Not built: an actual AWS deployment (container images, scheduled tasks, the
 dashboard behind a login), which would cost money to run; see
