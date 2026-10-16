@@ -47,11 +47,15 @@ def test_the_payload_is_posted_with_the_shared_secret():
     assert json.loads(request.content) == {"kind": "daily_digest"}
 
 
-def test_a_refused_request_fails():
-    transport = httpx.MockTransport(lambda r: httpx.Response(403))
+def test_a_refused_request_fails_with_the_reason_n8n_gives():
+    answer = {"status": "rejected", "errors": ["schema_version must be 1"]}
+    transport = httpx.MockTransport(lambda r: httpx.Response(400, json=answer))
 
-    with httpx.Client(transport=transport) as client, pytest.raises(httpx.HTTPStatusError):
+    with httpx.Client(transport=transport) as client, pytest.raises(webhook.WebhookError) as error:
         webhook.post(client, SETTINGS, "daily-digest", {})
+
+    assert "400" in str(error.value)
+    assert "schema_version must be 1" in str(error.value)
 
 
 def test_settings_come_from_the_environment(env):

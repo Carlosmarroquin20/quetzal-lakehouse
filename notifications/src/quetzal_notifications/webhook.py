@@ -46,8 +46,14 @@ def create_http_client(*, timeout: float = 30) -> httpx.Client:
     return httpx.Client(transport=httpx.HTTPTransport(retries=2), timeout=timeout)
 
 
+class WebhookError(Exception):
+    """n8n did not accept the request."""
+
+
 def post(client: httpx.Client, settings: WebhookSettings, path: str, payload: dict) -> None:
-    response = client.post(
-        settings.url(path), json=payload, headers={SECRET_HEADER: settings.secret}
-    )
-    response.raise_for_status()
+    url = settings.url(path)
+    response = client.post(url, json=payload, headers={SECRET_HEADER: settings.secret})
+    if response.is_error:
+        # n8n says in the body why it refused a payload; without it the task
+        # log would only show the status code.
+        raise WebhookError(f"{response.status_code} from {url}: {response.text[:500]}")
