@@ -127,6 +127,9 @@ n8n runs in its own profile and needs `N8N_ENCRYPTION_KEY` in `.env` (see
 2. Open <http://localhost:5678>. The first time, n8n asks for an owner
    account; it is stored only in n8n's volume on this machine.
 
+The credentials to create, the import of the workflows and how to try them
+with a sample payload are in [Notifications](notifications.md).
+
 ## Checking and stopping the stack
 
 To check how old the bronze data is:
@@ -152,12 +155,17 @@ everything n8n stored.
 
 The Python projects use [uv](https://docs.astral.sh/uv/).
 
-Ingestion and dashboard tests:
+Tests of the ingestion jobs, the dashboard, the digest and the DAG's failure
+callback, none of which needs the network:
 
 ```bash
 cd ingestion
 uv run pytest
 cd ../dashboard
+uv run pytest
+cd ../notifications
+uv run pytest
+cd ../orchestration
 uv run pytest
 ```
 
