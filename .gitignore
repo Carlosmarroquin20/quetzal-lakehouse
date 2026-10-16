@@ -14,6 +14,12 @@ dbt_packages/
 logs/
 *.duckdb
 
+# Terraform: providers, and state, which names every resource it created.
+# The lock file is tracked.
+.terraform/
+*.tfstate
+*.tfstate.*
+
 # Editor and OS files
 .vscode/
 .idea/
