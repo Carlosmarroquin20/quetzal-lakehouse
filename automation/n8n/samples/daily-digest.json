@@ -1,0 +1,58 @@
+{
+  "kind": "daily_digest",
+  "schema_version": 1,
+  "run_id": "manual__sample",
+  "run_date": "2026-10-15",
+  "generated_at": "2026-10-15T12:20:00+00:00",
+  "exchange_rate": {
+    "currency": "USD",
+    "date": "2026-10-15",
+    "rate": 7.69,
+    "is_published": true,
+    "rate_published_date": "2026-10-15",
+    "previous_date": "2026-10-14",
+    "previous_rate": 7.63988,
+    "change": 0.05012,
+    "change_percent": 0.656
+  },
+  "awards": {
+    "date": "2026-10-14",
+    "count": 1203,
+    "total_gtq": 185402117.5,
+    "total_usd": 24267564.93,
+    "year_to_date": {
+      "count": 234119,
+      "total_gtq": 43959779317.96,
+      "total_usd": 5756947696.96
+    },
+    "masked_suppliers": {
+      "count": 241,
+      "total_gtq": 61873000.0,
+      "total_usd": 8098821.95,
+      "largest_gtq": 12500000.0
+    },
+    "largest": [
+      {
+        "ocid": "ocds-sample-00000001",
+        "supplier_name": "EXAMPLE CONSTRUCTION, S.A.",
+        "buyer_name": "EXAMPLE MINISTRY",
+        "procurement_procedure": "Licitación Pública (Art. 17 LCE)",
+        "amount_gtq": 15800000.0,
+        "amount_usd": 2068101.59
+      },
+      {
+        "ocid": "ocds-sample-00000002",
+        "supplier_name": "EXAMPLE SUPPLIES, S.A.",
+        "buyer_name": "EXAMPLE MUNICIPALITY",
+        "procurement_procedure": "Cotización (Art. 38 LCE)",
+        "amount_gtq": 2340000.0,
+        "amount_usd": 306291.14
+      }
+    ]
+  },
+  "row_counts": {
+    "fct_exchange_rates": 13494,
+    "fct_awards": 516126,
+    "fct_budget_execution": 329256
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "pipeline_failure",
+  "schema_version": 1,
+  "dag_id": "quetzal_lakehouse",
+  "task_id": "dbt_build",
+  "run_id": "manual__sample",
+  "try_number": 3,
+  "failed_at": "2026-10-15T12:40:00+00:00",
+  "error": "DockerContainerFailedException: Docker container failed: {'StatusCode': 1}"
+}
