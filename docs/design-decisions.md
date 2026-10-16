@@ -300,7 +300,7 @@ and is left for later.
 project closely: every bronze partition and dbt model would be an asset with
 lineage drawn for free. Airflow was chosen because it is the orchestrator
 most teams run and most job descriptions ask for. The price is a task-based
-view: Airflow knows the four tasks, not the tables they produce.
+view: Airflow knows the five tasks, not the tables they produce.
 
 **Airflow schedules; the images do the work.** Each task starts the
 ingestion or transform image as a container, exactly like `docker compose
@@ -313,7 +313,8 @@ the Docker socket, mounted into the scheduler.
 they share nothing, and `dbt build` runs once all of them succeed. dbt
 already orders models and tests, so it runs as a single task; splitting it
 into one Airflow task per model (with Cosmos) would add a dbt parse inside
-Airflow for little gain at this size.
+Airflow for little gain at this size. A last task sends the daily digest once
+the build succeeds (see [Notifications](#notifications)).
 
 **The full range, every day.** Each run loads the exchange rates of the
 current year, Guatecompras from January 2025 and whatever is in the landing
@@ -357,6 +358,84 @@ gold and nothing else, so even a flaw in the app cannot reach silver, where
 the personal data is in the clear. Streamlit is also kept from contacting
 outside services: no usage statistics, and no lookup of the machine's public
 IP at start.
+
+## Notifications
+
+**Airflow owns the data, n8n owns the messages.** Airflow computes the digest
+and reports failures; n8n receives both as JSON, words the messages and
+sends them to Telegram and by email. Sending from Airflow directly, with its
+SMTP and Telegram providers, was rejected: the channels, their credentials
+and the wording of every message would live in the DAG, and changing any of
+them would mean changing pipeline code. In n8n each channel is a node,
+credentials are stored encrypted, and a failed delivery has its own error
+workflow. The price is one more service, and a payload format that both
+sides have to agree on. Letting n8n query gold itself was rejected too: it
+would need a storage key and SQL inside a tool where neither is reviewed or
+tested.
+
+**The digest is code in the repository.** The figures come from a small
+Python job, `notifications`, with tests against invented gold tables, run as
+its own image like every other task. It reads gold with a key pair that can
+read prod gold and nothing else, so it can be traced and revoked apart from
+the dashboard.
+
+**A versioned payload, checked on arrival.** Each payload names its `kind`
+and `schema_version`, and the workflows check every field they use before
+writing anything. A payload they were not written for gets a 400 with the
+reasons, which fails the Airflow task and shows up in its log, instead of a
+message that is wrong without anyone noticing.
+
+**A shared secret in a header.** Both webhooks require `X-Webhook-Secret`,
+checked by n8n before the workflow runs. An open webhook on loopback was
+rejected because any process on the machine could make the pipeline seem to
+report. Signing each payload with an HMAC would also prove its content, but
+n8n has no built-in check for it, so it would mean custom code in a workflow.
+
+**Notifications are optional.** Without a webhook URL the digest job ends
+with exit code 3 before reading gold, Airflow marks the task as skipped, and
+the failure callback sends nothing. The pipeline runs the same with or
+without n8n.
+
+**The failure callback uses only the standard library.** It runs inside the
+Airflow worker, not in a project image, so it lives in its own module that
+can be tested without installing Airflow. It is called once a task has used
+up its retries, not on each retry, and it never raises: a failed alert must
+not hide the failure it was about.
+
+**Settings in the environment.** The chat, the addresses and the alert
+thresholds are in `.env` and reach n8n as environment variables, so the
+exported workflows hold nothing personal. n8n blocks environment access from
+workflows by default; it is allowed here, where whoever can edit a workflow
+already holds `.env`. Keeping the values in a node of each workflow was
+rejected, because they would end up in git.
+
+**Masked suppliers stay a group.** The digest leaves the lakehouse, so it
+follows the dashboard: only legal entities are ranked, and awards to natural
+persons are reported as a number and a total. An alert for a large award to
+a masked supplier says only that there is one, since the buyer, the day and
+the amount are enough to find the process in Guatecompras.
+
+**Both channels, every time.** A failure to send to Telegram does not stop
+the email, or the other way round. The workflow fails after both were tried,
+and the error workflow reports what failed, through both channels.
+
+**Plain text messages.** The same text goes to Telegram and by email.
+Telegram receives it as HTML with `&`, `<` and `>` escaped; without a mode
+the node uses Markdown, where the underscore of a task name like `dbt_build`
+starts a format and the message can be refused.
+
+**Workflows are exports, normalized.** Workflows are built in n8n's editor
+and exported, and `automation/n8n/normalize_workflows.py` turns the export
+into the versioned files: it drops what belongs to one instance (dates,
+owner, credential IDs, whether a workflow is published) and refuses anything
+that looks like a token, a password or a personal address. Credentials are
+created by hand in the interface and referred to by name, which n8n resolves
+on import. Writing the workflow files by hand was rejected: n8n owns their
+format, and an export is what it reads back reliably.
+
+**n8n keeps its own SQLite database.** Workflows, credentials and executions
+live in n8n's volume. Pointing it at the Postgres of Airflow was rejected:
+it would tie two services that have nothing else in common.
 
 ## Infrastructure
 

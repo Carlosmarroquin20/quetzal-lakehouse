@@ -117,7 +117,7 @@ them in a meaningful way:
   started by EventBridge Scheduler in the order the Airflow DAG uses, or by
   Amazon MWAA (managed Airflow) running the existing DAG with the ECS
   operator instead of the Docker one. MWAA keeps the DAG as it is but has a
-  fixed monthly cost; the scheduler is much cheaper for four tasks a day.
+  fixed monthly cost; the scheduler is much cheaper for five tasks a day.
 - **The dashboard as an ECS service** behind a load balancer with
   authentication, since Streamlit has no login.
 - **Secrets in AWS Secrets Manager**: the pseudonymization keys, read by the
