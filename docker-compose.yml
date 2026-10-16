@@ -356,6 +356,21 @@ services:
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
       N8N_TEMPLATES_ENABLED: "false"
+      # The workflows read the settings below from the environment, which n8n
+      # blocks by default. Allowing it lets any workflow read every variable
+      # of this container, the encryption key included; here the only person
+      # who can edit workflows is the one who already holds .env.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Who receives the messages and when the digest raises an alert. Optional
+      # here so that the stack starts without them; the workflows refuse to
+      # run while one is missing.
+      NOTIFICATIONS_TELEGRAM_CHAT_ID: ${NOTIFICATIONS_TELEGRAM_CHAT_ID:-}
+      NOTIFICATIONS_EMAIL_FROM: ${NOTIFICATIONS_EMAIL_FROM:-}
+      NOTIFICATIONS_EMAIL_TO: ${NOTIFICATIONS_EMAIL_TO:-}
+      NOTIFICATIONS_RATE_CHANGE_ALERT_PERCENT: ${NOTIFICATIONS_RATE_CHANGE_ALERT_PERCENT:-}
+      NOTIFICATIONS_AWARD_ALERT_GTQ: ${NOTIFICATIONS_AWARD_ALERT_GTQ:-}
+      # Where failure alerts link to: Airflow as published on this machine.
+      NOTIFICATIONS_AIRFLOW_URL: http://localhost:8081
     ports:
       # Published on loopback only, like the other interfaces.
       - "127.0.0.1:5678:5678"
