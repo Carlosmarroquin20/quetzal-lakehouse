@@ -357,3 +357,44 @@ gold and nothing else, so even a flaw in the app cannot reach silver, where
 the personal data is in the clear. Streamlit is also kept from contacting
 outside services: no usage statistics, and no lookup of the machine's public
 IP at start.
+
+## Infrastructure
+
+**Terraform for storage and permissions only.** The configuration covers
+what the code depends on: the buckets and what each job may do in them.
+Images, scheduled tasks and the dashboard service were left as a written
+design, because running them costs money and an emulator cannot show that
+they work.
+
+**An emulator, not an AWS account.** Applying the configuration to AWS would
+create billable resources. It is applied instead to Moto, an open source
+emulator of the AWS APIs that runs in a container without an account.
+LocalStack, the better known emulator, was rejected because since March 2026
+it requires an account and a token even on its free plan, which is limited
+to non-commercial use. The price is that Moto does not enforce IAM policies.
+
+**Roles, not users with keys.** Each job gets an IAM role to be assumed by
+its ECS task, so its credentials are temporary and rotate on their own. IAM
+users with access keys would have mirrored the local key pairs exactly, but
+long-lived keys are what a security review flags first. The jobs had to
+change for this: they used to require a key pair, and now use the standard
+AWS credential chain when none is given. In dbt the secret is created by a
+plugin, because the profile cannot leave out a setting depending on the
+environment, and a key given at all, even empty, overrides the chain.
+
+**Keys managed by S3.** Every bucket is encrypted with SSE-S3. A customer
+managed KMS key would add a monthly cost and a charge per request, for data
+that is public.
+
+**Versioning only where data cannot be rebuilt.** Bronze keeps previous
+versions for 90 days, because the sources do not keep their history and an
+overwrite by a bad load would otherwise be final. Silver and gold are
+rebuilt from bronze on every run, so versioning them would only add cost.
+
+**The same configuration for the emulator and for AWS.** The emulator is
+reached through `AWS_ENDPOINT_URL`, a standard variable, and the only
+differences are in `emulator.tfvars`: path-style addresses, and the TLS-only
+bucket policy turned off because the emulator serves plain HTTP.
+
+**Terraform in a container.** Like every other tool in the project it runs
+through Compose, pinned to one version, so nothing has to be installed.

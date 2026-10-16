@@ -68,7 +68,8 @@ prod can read bronze and write prod silver and gold; dbt in dev can read
 bronze and write dev silver and gold, and cannot even read prod; the
 dashboard can read prod gold and nothing else. This is what
 the bucket per layer was chosen for in the first place. The administrator key
-is not used by any job.
+is not used by any job. On AWS the same four roles are IAM roles with the
+same access and no long-lived keys; see [AWS](aws.md).
 
 **Two environments, one bronze.** Bronze is the same for both, because
 downloading the sources twice would add nothing. Silver and gold have a

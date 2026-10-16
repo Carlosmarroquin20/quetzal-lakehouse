@@ -89,3 +89,17 @@
   overall may include natural persons, which it shows only as a group.
 - The dashboard's pages have no automated tests; its queries do. The pages
   were checked by opening them against the data of 2026-10-14.
+
+## AWS
+
+- The Terraform configuration has never been applied to an AWS account, only
+  to an emulator. AWS may reject something the emulator accepted.
+- The emulator does not enforce IAM policies, so the limits of each role
+  were only checked against SeaweedFS, which enforces the same rules.
+- The emulator does not keep bucket tags set through S3 Control, so a plan
+  right after an apply proposes to add them again, along with the bucket
+  policies that depend on the buckets.
+- Only storage and permissions are written. Images, scheduled tasks, the
+  dashboard service and secrets are described in docs/aws.md but not coded.
+- Terraform state is a local file; a shared deployment needs remote state
+  with locking.

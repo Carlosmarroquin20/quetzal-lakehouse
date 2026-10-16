@@ -4,7 +4,8 @@ A lakehouse on public financial data from Guatemala: the central bank's
 exchange rate, public procurement and the central government's budget. Each
 source lands untouched in bronze, dbt and DuckDB turn it into typed silver
 tables and a star schema in gold, Airflow runs it every day, and a dashboard
-reads gold.
+reads gold. Terraform describes the AWS storage and roles it would run on,
+tested against a local AWS emulator.
 
 Everything described here exists in the repository. Planned work is listed
 under [Status](#status).
@@ -32,7 +33,8 @@ under [Status](#status).
   has not changed are skipped by their checksum.
 - **Storage apart from compute:** every layer is Parquet in its own bucket of
   an S3-compatible store; DuckDB is only the engine, so moving to AWS S3
-  changes configuration, not code.
+  changes configuration, not code. That was checked by running the jobs
+  against an AWS emulator with the temporary credentials of their IAM roles.
 - **A dimensional model:** three fact tables (513,471 awards, 329,256 budget
   lines, a daily exchange rate) sharing date, currency and entity dimensions,
   so budget and procurement can be compared entity by entity.
@@ -45,6 +47,10 @@ under [Status](#status).
   to the dashboard.
 - **Runs on its own:** Airflow runs the whole pipeline every day at 06:00,
   Guatemala time.
+- **Infrastructure as code:** Terraform creates the AWS buckets, with
+  encryption, blocked public access and versioned bronze, and one
+  least-privilege IAM role per job. It has never been applied to an AWS
+  account, so it has cost nothing.
 
 Row counts are from the run of 2026-10-13.
 
@@ -91,6 +97,7 @@ flowchart LR
 | Transformation | dbt Core 1.12 with dbt-duckdb, DuckDB 1.5 |
 | Orchestration | Airflow 3.3 with the local executor and Postgres |
 | Dashboard | Streamlit with DuckDB |
+| Infrastructure | Terraform 1.16 with the AWS provider; Moto as the AWS emulator |
 | Runtime | Docker Compose |
 
 ## Repository layout
@@ -101,6 +108,7 @@ flowchart LR
 | `transform/` | The dbt project: silver and gold models, tests, seeds and the pseudonymization plugin. |
 | `orchestration/dags/` | The Airflow DAG. |
 | `dashboard/` | The Streamlit dashboard, its queries and their tests. |
+| `infra/aws/` | The Terraform configuration of the AWS storage and roles. |
 | `docs/` | The documentation listed below. |
 | `docker-compose.yml` | Every service and job, with the storage roles. |
 | `.env.example` | The configuration to copy into a local `.env`, which git ignores. |
@@ -133,20 +141,21 @@ documentation site, Airflow and development.
 | [Data quality](docs/data-quality.md) | What profiling each source found, and the tests that encode it. |
 | [Governance](docs/governance.md) | Personal data and its masking, the storage roles, the two environments, and lineage. |
 | [Design decisions](docs/design-decisions.md) | Each decision, with the alternatives that were rejected. |
+| [AWS](docs/aws.md) | The Terraform configuration, how to try it against the emulator, and what a deployment would add. |
 | [Known limitations](docs/known-limitations.md) | What the project does not handle, or handles only in part. |
 
 ## Status
 
 Built, in this order: the choice of sources, the storage, the bronze, silver
 and gold layers for the exchange rate, procurement and the budget, the daily
-orchestration, governance, and the dashboard.
+orchestration, governance, the dashboard, and the Terraform configuration of
+the AWS storage and roles.
 
-Not built yet:
-
-1. Deployment to AWS with Terraform.
-
-Also not built: publishing the dbt documentation (for example on GitHub
-Pages) and a table format for silver and gold.
+Not built: an actual AWS deployment (container images, scheduled tasks, the
+dashboard behind a login), which would cost money to run; see
+[AWS](docs/aws.md#what-a-deployment-would-add). Nor publishing the dbt
+documentation, for example on GitHub Pages, or a table format for silver and
+gold.
 
 ## Data sources
 
