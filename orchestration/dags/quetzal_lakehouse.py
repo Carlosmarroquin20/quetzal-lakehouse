@@ -7,7 +7,8 @@ silver and gold and runs the tests. The last task posts a digest of the new
 gold to n8n, which words it and sends it on.
 
 Every job is idempotent, so a failed task can simply run again. That is why
-retries live here and not inside the jobs.
+retries live here and not inside the jobs. A task that still fails after its
+retries is reported to n8n, which sends the alert.
 """
 
 import os
@@ -17,6 +18,8 @@ import pendulum
 from airflow.providers.docker.operators.docker import DockerOperator
 from airflow.sdk import DAG
 from docker.types import Mount
+
+from failure_alerts import report_failure
 
 NETWORK = "quetzal-lakehouse_default"
 INGESTION_IMAGE = "quetzal-lakehouse-ingestion"
@@ -104,6 +107,8 @@ with DAG(
     default_args={
         "retries": 2,
         "retry_delay": timedelta(minutes=10),
+        # Called once a task has failed for good, not on each retry.
+        "on_failure_callback": report_failure,
     },
     tags=["lakehouse"],
 ) as dag:

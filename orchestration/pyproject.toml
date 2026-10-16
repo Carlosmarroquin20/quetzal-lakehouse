@@ -1,0 +1,23 @@
+[project]
+name = "quetzal-orchestration"
+version = "0.1.0"
+description = "Tests for the parts of the Airflow DAG that do not need Airflow."
+requires-python = ">=3.13"
+dependencies = []
+
+# The DAG folder is not a package: Airflow puts it on the import path, and so
+# do the tests.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["dags"]
+
+[tool.ruff]
+src = ["dags"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
