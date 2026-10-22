@@ -92,9 +92,9 @@
 
 ## Notifications
 
-- The workflows were checked against stand-ins for Telegram and an SMTP
-  server, not against the real services. Delivery depends on the bot token
-  and mail account entered as n8n credentials.
+- Delivery through a real Telegram bot and a Gmail account was checked for
+  the digest only. The failure alert, a refused message and the error
+  workflow were checked against stand-ins for Telegram and an SMTP server.
 - If n8n is down, nothing is reported: the digest task fails after its
   retries, and the alert about that failure cannot reach n8n either. Only
   the Airflow interface shows it.

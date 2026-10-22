@@ -235,5 +235,11 @@ built for the check, in place of the real services:
 - The workflows were imported from the repository into an empty n8n, and the
   credentials, created first, were linked by name.
 
-Delivery to a real Telegram bot and a real mail server depends on the
-credentials created in the interface and was not part of these checks.
+On 2026-10-22, with a real Telegram bot and a Gmail account set up as
+described above:
+
+- The sample digest, posted by hand, and the digest of the real gold, sent
+  by Airflow's `send_daily_digest`, both arrived in Telegram and by email.
+
+The failure paths (a refused message, the error workflow) were only checked
+against the stand-ins.
