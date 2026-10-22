@@ -280,7 +280,7 @@ services:
   # the ingestion or transform image as a container, through the Docker
   # socket. Start it with `docker compose --profile airflow up -d`.
   airflow-db:
-    image: postgres:17.7-alpine
+    image: postgres:18.4-alpine
     profiles: ["airflow"]
     environment:
       POSTGRES_USER: ${AIRFLOW_DB_USER:?set AIRFLOW_DB_USER in .env}
