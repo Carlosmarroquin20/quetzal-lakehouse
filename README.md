@@ -1,5 +1,7 @@
 # quetzal-lakehouse
 
+[![CI](https://github.com/Carlosmarroquin20/quetzal-lakehouse/actions/workflows/ci.yml/badge.svg)](https://github.com/Carlosmarroquin20/quetzal-lakehouse/actions/workflows/ci.yml)
+
 A lakehouse on public financial data from Guatemala: the central bank's
 exchange rate, public procurement and the central government's budget. Each
 source lands untouched in bronze, dbt and DuckDB turn it into typed silver
@@ -43,6 +45,10 @@ under [Status](#status).
   tests fail on new anomalies, not on the known ones; 71 ingestion tests, 16
   dashboard tests, 22 digest tests and 7 tests of the DAG's failure callback
   cover the Python code.
+- **Continuous integration:** every push runs those tests, checks the dbt
+  project, the Terraform configuration and the Compose file, audits the
+  locked dependencies for known vulnerabilities and scans the history for
+  secrets. Dependabot proposes updates every week.
 - **Governance:** natural persons are pseudonymized in gold with a keyed hash,
   each job has a storage key pair that reaches only its own buckets, dbt runs
   in separate dev and prod environments, and the lineage runs from each source

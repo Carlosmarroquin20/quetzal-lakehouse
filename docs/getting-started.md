@@ -176,3 +176,11 @@ command can follow the service name, for example
 `docker compose run --rm transform-dev test --select dim_supplier`. The
 dashboard runs from its image too, so a change to it needs
 `docker compose up -d --build dashboard`.
+
+GitHub Actions runs the same tests on every push and pull request
+(`.github/workflows/ci.yml`), together with `dbt parse` and the unit tests of
+the silver models, `terraform fmt` and `validate`, a check of the Compose
+file against `.env.example`, `pip-audit` on each lock file, and gitleaks on
+the whole history. None of it needs a store or a credential. Dependabot
+(`.github/dependabot.yml`) opens weekly pull requests for the Python
+packages, the images, the Terraform provider and the actions.

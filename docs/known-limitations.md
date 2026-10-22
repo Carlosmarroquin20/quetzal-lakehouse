@@ -134,3 +134,12 @@
   dashboard service and secrets are described in docs/aws.md but not coded.
 - Terraform state is a local file; a shared deployment needs remote state
   with locking.
+
+## Continuous integration
+
+- CI does not run `dbt build`: that needs the sources in an object store.
+  The data tests and the unit tests of the gold models run only with a build,
+  locally or in Airflow.
+- The dependency audit only knows published vulnerabilities, and only for
+  Python packages. The images themselves (operating system packages, Airflow,
+  n8n) are not scanned.

@@ -477,3 +477,25 @@ bucket policy turned off because the emulator serves plain HTTP.
 
 **Terraform in a container.** Like every other tool in the project it runs
 through Compose, pinned to one version, so nothing has to be installed.
+
+## Continuous integration
+
+**Checks that need nothing.** CI runs what can run without a store or a
+secret: the Python tests, `dbt parse` and the unit tests of the silver models,
+`terraform validate`, the Compose file, a dependency audit and a secret scan.
+Running the whole pipeline in CI was rejected: it would download the sources
+on every push, about 0.7 GB from Guatecompras alone, and need a store in the
+runner.
+
+**Actions pinned to a commit.** A tag can be moved to point at different
+code, which is how a compromised action reaches the projects that use it. A
+commit hash cannot, and Dependabot keeps the hashes current.
+
+**The audit reads the lock files.** `pip-audit` checks exactly the versions
+the images install, exported from each `uv.lock`, not whatever the latest
+release would be.
+
+**A week before any update.** Dependabot proposes a release only once it is
+seven days old, so that a broken or malicious one has time to be withdrawn.
+Minor and patch updates come grouped, one pull request per kind of
+dependency; major ones come alone.
