@@ -26,6 +26,9 @@ def secret_of(con: duckdb.DuckDBPyConnection) -> dict[str, str]:
 @pytest.fixture
 def con():
     con = duckdb.connect()
+    # The image installs the extension at build time; a test machine may not
+    # have it yet. Installing an extension that is already there is a no-op.
+    con.install_extension("httpfs")
     con.load_extension("httpfs")
     return con
 
