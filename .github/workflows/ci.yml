@@ -1,0 +1,133 @@
+# Checks every push and pull request without any service or credential:
+# tests, the dbt project, the Terraform configuration, the Compose file,
+# known vulnerabilities in the locked dependencies, and secrets in the
+# history. Actions are pinned to a commit, not a tag, so a moved tag cannot
+# change what runs here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.12.9"
+  PIP_AUDIT_VERSION: "2.10.1"
+
+jobs:
+  python-tests:
+    name: Tests (${{ matrix.project }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [ingestion, dashboard, notifications, orchestration]
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --frozen
+      - run: uv run pytest
+
+  dbt:
+    name: dbt project
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: transform
+    # Placeholders: nothing here reaches a store. They only let the project
+    # compile and the plugins load. The key pair keeps DuckDB from searching
+    # the AWS credential chain, which would look for a metadata service on
+    # the runner.
+    env:
+      DBT_TARGET: dev
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: ci-placeholder
+      S3_SECRET_ACCESS_KEY: ci-placeholder
+      S3_BUCKET_BRONZE: ci-bronze
+      S3_BUCKET_SILVER: ci-silver
+      S3_BUCKET_GOLD: ci-gold
+      PSEUDONYMIZATION_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --frozen
+      - run: uv run dbt deps
+      - run: uv run dbt parse
+      # The unit tests of silver models run on fixtures alone. Those of gold
+      # models need the silver tables to exist, which takes a build against
+      # the object store, so they run with every `dbt build` instead.
+      - run: uv run dbt test --select "test_type:unit,path:models/silver"
+
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: infra/aws
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false -lockfile=readonly
+      - run: terraform validate
+
+  compose:
+    name: Compose file
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The template has placeholders for every required variable. -q keeps
+      # the resolved file, which would list them, out of the log.
+      - run: cp .env.example .env
+      - run: >-
+          docker compose --profile jobs --profile docs --profile dashboard
+          --profile airflow --profile notifications --profile aws config -q
+
+  dependency-audit:
+    name: Known vulnerabilities (${{ matrix.project }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [ingestion, transform, dashboard, notifications, orchestration]
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      # Exactly the versions the image installs, from the lock file.
+      - run: uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements.txt
+      - run: >-
+          uvx pip-audit==${{ env.PIP_AUDIT_VERSION }}
+          -r requirements.txt --no-deps --disable-pip --progress-spinner off
+
+  secrets:
+    name: Secrets in the history
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: >-
+          docker run --rm -v "$PWD:/repo"
+          ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --no-banner --redact
