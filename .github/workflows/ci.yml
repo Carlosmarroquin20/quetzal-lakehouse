@@ -37,6 +37,8 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: ${{ env.UV_VERSION }}
+          # One cache per job: each project locks different packages.
+          cache-suffix: tests-${{ matrix.project }}
       - run: uv sync --frozen
       - run: uv run pytest
 
@@ -64,6 +66,8 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: ${{ env.UV_VERSION }}
+          # One cache per job: each project locks different packages.
+          cache-suffix: transform
       - run: uv sync --frozen
       - run: uv run dbt deps
       - run: uv run dbt parse
@@ -115,6 +119,8 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: ${{ env.UV_VERSION }}
+          # One cache per job: each project locks different packages.
+          cache-suffix: audit-${{ matrix.project }}
       # Exactly the versions the image installs, from the lock file.
       - run: uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements.txt
       - run: >-
