@@ -1,0 +1,64 @@
+# Weekly pull requests for new versions of everything the project pins:
+# Python packages in each uv lock file, base images, Compose images, the
+# Terraform provider and the CI actions. Minor and patch updates of each
+# ecosystem come grouped in one pull request; major ones come alone, since
+# they are the ones that break. A release is only proposed once it is a week
+# old, so a broken or compromised one has time to be pulled first.
+version: 2
+
+updates:
+  - package-ecosystem: uv
+    directories:
+      - /ingestion
+      - /transform
+      - /dashboard
+      - /notifications
+      - /orchestration
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories:
+      - /ingestion
+      - /transform
+      - /dashboard
+      - /notifications
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      base-images:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      compose-images:
+        update-types: [minor, patch]
+
+  - package-ecosystem: terraform
+    directory: /infra/aws
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        update-types: [minor, patch]
