@@ -55,7 +55,8 @@ under [Status](#status).
   in separate dev and prod environments, and the lineage runs from each source
   to the dashboard.
 - **Runs on its own:** Airflow runs the whole pipeline every day at 06:00,
-  Guatemala time.
+  Guatemala time, and checks that every source was loaded recently enough;
+  a stale one raises an alert.
 - **Notifications:** each run ends with a digest of gold (the dollar rate and
   its change, the awards of the day before, the largest of them) sent to
   Telegram and by email, with alerts above configurable thresholds; a task

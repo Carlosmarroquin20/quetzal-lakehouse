@@ -24,8 +24,9 @@
   all 22 months from January 2025 had a new checksum while January 2020 did
   not, so the daily run downloads about 0.7 GB; the checksum only saves the
   downloads of a second run on the same day.
-- The budget depends on someone downloading the workbooks. Nothing reminds
-  them, and the freshness check only warns after 35 days.
+- The budget depends on someone downloading the workbooks. The only
+  reminder is the freshness alert, 35 days after the last new workbook, and
+  it reaches nobody when the notifications are not set up.
 - The date up to which the current year's budget is accumulated is not in
   the workbook. Only the day of the download is known, in the file name.
 - Loading an older workbook of a year after a newer one replaces the newer
@@ -53,7 +54,8 @@
   appear only in the local `docs` service, after a build.
 - The exposure of the dashboard links to `localhost`, so on the published
   site that link only works on a machine running the project.
-- The freshness check is a separate command and is not part of `dbt build`.
+- Freshness warnings, short of the error threshold, only show in the
+  Airflow log; only errors raise an alert.
 
 ## Governance
 
@@ -80,6 +82,9 @@
   found by its label (see the getting started guide).
 - The DAG tests check how the DAG is built, not a run: they load it in
   Airflow without starting any task. Runs were checked end to end by hand.
+- With the scheduler running, `airflow tasks test` creates a temporary run,
+  and the scheduler starts that run's other ready tasks too, such as the
+  ingestion. Pause the DAG before testing one task by hand.
 - Everything shares one virtual machine of Docker Desktop. During one run a
   dbt build starved the Airflow scheduler for 36 seconds, Airflow declared it
   dead and killed the dbt task, and the retry succeeded. The scheduler now

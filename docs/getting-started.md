@@ -132,7 +132,9 @@ with a sample payload are in [Notifications](notifications.md).
 
 ## Checking and stopping the stack
 
-To check how old the bronze data is:
+Airflow checks every day how old the bronze data is, and its failure alert
+says when a source is past its limit: seven days for the exchange rate and
+Guatecompras, 35 days for the budget workbook. To check by hand:
 
 ```bash
 docker compose run --rm transform source freshness

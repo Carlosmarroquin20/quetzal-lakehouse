@@ -308,7 +308,7 @@ model.
 project closely: every bronze partition and dbt model would be an asset with
 lineage drawn for free. Airflow was chosen because it is the orchestrator
 most teams run and most job descriptions ask for. The price is a task-based
-view: Airflow knows the five tasks, not the tables they produce.
+view: Airflow knows the six tasks, not the tables they produce.
 
 **Airflow schedules; the images do the work.** Each task starts the
 ingestion or transform image as a container, exactly like `docker compose
@@ -348,6 +348,16 @@ already orders models and tests, so it runs as a single task; splitting it
 into one Airflow task per model (with Cosmos) would add a dbt parse inside
 Airflow for little gain at this size. A last task sends the daily digest once
 the build succeeds (see [Notifications](#notifications)).
+
+**Freshness is checked every day, beside the build.** After the ingestion,
+`check_source_freshness` runs `dbt source freshness` in parallel with
+`dbt build`. A source past its error threshold fails the task, and the
+failure alert reports it; a warning only shows in the log. Running it before
+the build, as a gate, was rejected: stale data is still worth building and
+showing, as long as someone is told. It uses a DuckDB file of its own, since
+two processes cannot open one file at once, and it has no retries, because
+trying again does not make a source fresher. The budget's error threshold is
+35 days, so the same alert is the reminder to download a new workbook.
 
 **The full range, every day.** Each run loads the exchange rates of the
 current year, Guatecompras from January 2025 and whatever is in the landing
