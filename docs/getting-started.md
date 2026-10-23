@@ -169,6 +169,13 @@ cd ../orchestration
 uv run pytest
 ```
 
+The tests of the DAG itself need Airflow, so the uv environment skips them.
+They run inside the Airflow image the stack uses:
+
+```bash
+docker run --rm -v "$PWD/orchestration:/opt/orchestration:ro" -w /opt/orchestration --entrypoint bash apache/airflow:3.3.2 -c "pip install -q pytest==9.1.1 && python -m pytest -p no:cacheprovider tests"
+```
+
 Jobs run through Compose, which hands each one the key pair of its role:
 `docker compose run --rm ingestion <job>` for ingestion, and
 `docker compose run --rm transform-dev` for dbt while developing. Any dbt
@@ -182,9 +189,10 @@ documentation to GitHub Pages, at <https://carlosmarroquin20.github.io/quetzal-l
 that changes the dbt project.
 
 GitHub Actions runs the same tests on every push and pull request
-(`.github/workflows/ci.yml`), together with `dbt parse` and the unit tests of
-the silver models, `terraform fmt` and `validate`, a check of the Compose
-file against `.env.example`, `pip-audit` on each lock file, and gitleaks on
-the whole history. None of it needs a store or a credential. Dependabot
+(`.github/workflows/ci.yml`), together with `dbt parse` and every dbt unit
+test, the DAG loaded in the Airflow image, `terraform fmt` and `validate`, a
+check of the Compose file against `.env.example`, `pip-audit` on each lock
+file, a Trivy scan of the four project images, and gitleaks on the whole
+history. None of it needs a store or a credential. Dependabot
 (`.github/dependabot.yml`) opens weekly pull requests for the Python
 packages, the images, the Terraform provider and the actions.

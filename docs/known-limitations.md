@@ -145,8 +145,10 @@
 ## Continuous integration
 
 - CI does not run `dbt build`: that needs the sources in an object store.
-  The data tests and the unit tests of the gold models run only with a build,
-  locally or in Airflow.
-- The dependency audit only knows published vulnerabilities, and only for
-  Python packages. The images themselves (operating system packages, Airflow,
-  n8n) are not scanned.
+  The data tests run only with a build, locally or in Airflow.
+- The scans only know published vulnerabilities. The image scan covers
+  the four project images; the third-party images (Airflow, Postgres, n8n,
+  SeaweedFS and the others) are not scanned, only kept current by
+  Dependabot.
+- The image scan ignores vulnerabilities without a fix, which cannot be acted
+  on but still exist.

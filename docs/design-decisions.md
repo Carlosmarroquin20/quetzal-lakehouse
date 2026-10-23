@@ -503,8 +503,9 @@ through Compose, pinned to one version, so nothing has to be installed.
 ## Continuous integration
 
 **Checks that need nothing.** CI runs what can run without a store or a
-secret: the Python tests, `dbt parse` and the unit tests of the silver models,
-`terraform validate`, the Compose file, a dependency audit and a secret scan.
+secret: the Python tests, `dbt parse` and every dbt unit test, the DAG
+loaded in the Airflow image, `terraform validate`, the Compose file, a
+dependency audit, an image scan and a secret scan.
 Running the whole pipeline in CI was rejected: it would download the sources
 on every push, about 0.7 GB from Guatecompras alone, and need a store in the
 runner.
@@ -521,3 +522,27 @@ release would be.
 seven days old, so that a broken or malicious one has time to be withdrawn.
 Minor and patch updates come grouped, one pull request per kind of
 dependency; major ones come alone.
+
+**Unit test inputs as typed SQL.** The unit tests of gold models give their
+inputs as SQL with explicit types instead of rows. With rows, dbt reads the
+column types from the upstream tables, which only exist after a build
+against the object store; with SQL it needs nothing, so every unit test runs
+in CI.
+
+**The DAG is tested where it runs.** The DAG tests load it in the same
+Airflow image the stack uses, with the version read from the Compose file,
+instead of installing Airflow next to the tests. They check what the DAG
+promises: the order of the tasks, the schedule, the retries and the failure
+callback, that every task reaches Docker through the proxy, and that no
+secret goes through the environment Airflow shows in its interface.
+
+**Scan the images, not only the lock files.** `pip-audit` sees the Python
+packages of each lock file; Trivy sees everything in the image. Its first
+run found a critical and three high vulnerabilities that the audit could not
+see, all in the copies of certifi, urllib3 and msgpack inside the base
+image's own pip, which nothing uses. pip was removed from the images rather
+than kept up to date. The same scan showed that each image kept uv's
+download cache, a second copy of every package; dropping it made the images
+200 MB to 600 MB smaller. CI fails on a high or critical vulnerability that
+has a fix, in the four project images.
+

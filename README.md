@@ -43,12 +43,13 @@ under [Status](#status).
   so budget and procurement can be compared entity by entity.
 - **Tests that encode what profiling found:** 195 dbt data tests and 8 unit
   tests fail on new anomalies, not on the known ones; 71 ingestion tests, 16
-  dashboard tests, 22 digest tests and 7 tests of the DAG's failure callback
-  cover the Python code.
-- **Continuous integration:** every push runs those tests, checks the dbt
-  project, the Terraform configuration and the Compose file, audits the
-  locked dependencies for known vulnerabilities and scans the history for
-  secrets. Dependabot proposes updates every week.
+  dashboard tests, 22 digest tests and 14 tests of the Airflow DAG and its
+  failure callback cover the Python code.
+- **Continuous integration:** every push runs those tests and the dbt unit
+  tests, loads the DAG in the Airflow image, checks the Terraform
+  configuration and the Compose file, scans the locked dependencies and the
+  images for known vulnerabilities and the history for secrets. Dependabot
+  proposes updates every week.
 - **Governance:** natural persons are pseudonymized in gold with a keyed hash,
   each job has a storage key pair that reaches only its own buckets, dbt runs
   in separate dev and prod environments, and the lineage runs from each source
