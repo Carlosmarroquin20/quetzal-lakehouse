@@ -245,7 +245,7 @@ services:
   # infra/aws and the jobs against it without an AWS account. Start it with
   # `docker compose --profile aws up -d aws-emulator`; see docs/aws.md.
   aws-emulator:
-    image: motoserver/moto:5.2.3
+    image: motoserver/moto:5.2.4
     profiles: ["aws"]
     networks:
       default:
@@ -262,7 +262,7 @@ services:
     # Terraform without installing it: `docker compose --profile aws run
     # --rm terraform <command>`. It talks to the emulator, with the dummy
     # credentials the emulator accepts; nothing reaches AWS.
-    image: hashicorp/terraform:1.16.4
+    image: hashicorp/terraform:1.16.6
     profiles: ["aws"]
     working_dir: /infra
     environment:
@@ -342,7 +342,7 @@ services:
     # webhooks. Start it with `docker compose --profile notifications up -d`.
     # The tag is pinned because n8n releases often, and an upgrade can change
     # how stored workflows behave.
-    image: n8nio/n8n:2.43.6
+    image: n8nio/n8n:2.44.2
     profiles: ["notifications"]
     environment:
       # Encrypts the credentials n8n stores, such as the bot token. Given here
