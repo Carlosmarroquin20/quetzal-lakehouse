@@ -75,10 +75,11 @@
   volumes, networks and system calls, but still lets it create containers,
   and a container can be created with the host mounted. Untrusted DAGs must
   not run on this stack.
-- When Airflow kills a task, the DockerOperator stops its container but does
-  not remove it; stopped job containers have to be removed by hand.
-- The DAG itself has no automated tests; only its failure callback does. It
-  was checked by parsing it in Airflow and by running it end to end.
+- When Airflow kills a task, the operator stops and removes its container.
+  If the scheduler itself dies before it can, the container stays; it is
+  found by its label (see the getting started guide).
+- The DAG tests check how the DAG is built, not a run: they load it in
+  Airflow without starting any task. Runs were checked end to end by hand.
 - Everything shares one virtual machine of Docker Desktop. During one run a
   dbt build starved the Airflow scheduler for 36 seconds, Airflow declared it
   dead and killed the dbt task, and the retry succeeded. The scheduler now

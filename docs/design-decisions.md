@@ -331,6 +331,17 @@ that takes a Docker daemon without root or an authorization plugin; on AWS
 the question disappears, because ECS starts the tasks and Airflow never
 touches Docker.
 
+**Job containers stop on SIGINT.** When Airflow kills a task it gives it
+about ten seconds, in two five-second steps, before killing it outright, and
+in that time the operator stops the task's container and removes it. A job
+runs as process 1 of its container, and Linux delivers no SIGTERM to
+process 1 unless it handles it, so `docker stop` waited its full ten seconds
+and the task died before the removal: killed tasks left stopped containers
+behind. Python handles SIGINT, so the images set it as their stop signal;
+`docker stop` now takes under a second (dbt about four, as it cancels), and
+the container is removed. An init process such as tini would have forwarded
+SIGTERM too, but it adds a binary to every image for what one line does.
+
 **One DAG, one dbt task.** The three ingestion tasks run in parallel, since
 they share nothing, and `dbt build` runs once all of them succeed. dbt
 already orders models and tests, so it runs as a single task; splitting it

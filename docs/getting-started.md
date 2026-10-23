@@ -151,6 +151,16 @@ docker compose --profile docs --profile dashboard --profile airflow --profile no
 Adding `-v` also deletes the volumes, and with them every stored object and
 everything n8n stored.
 
+Every container Airflow starts carries the label `quetzal-lakehouse.task`
+with the name of its task, and is removed when the task ends or is killed.
+If the scheduler itself dies first, a stopped container can stay behind. To
+list and remove those:
+
+```bash
+docker ps --all --filter label=quetzal-lakehouse.task
+docker container prune --filter label=quetzal-lakehouse.task
+```
+
 ## Development
 
 The Python projects use [uv](https://docs.astral.sh/uv/).
