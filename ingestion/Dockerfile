@@ -4,6 +4,11 @@ FROM python:3.13-slim
 # builds the same way every time.
 COPY --from=ghcr.io/astral-sh/uv:0.12.9 /uv /usr/local/bin/uv
 
+# The base image's pip is never used: uv installs everything. It carries its
+# own copies of certifi, urllib3 and msgpack, which image scans report as
+# vulnerable, so it is removed rather than kept up to date.
+RUN pip uninstall --yes --quiet pip
+
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
