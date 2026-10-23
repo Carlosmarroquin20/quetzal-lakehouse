@@ -73,6 +73,22 @@ JOB_LABEL = "quetzal-lakehouse.task"
 GUATECOMPRAS_FIRST_MONTH = "2025-01"
 
 
+class JobOperator(DockerOperator):
+    """The Docker operator, removing a killed task's container at once.
+
+    When Airflow kills a task it gives it five seconds before killing it
+    outright. The stock operator spends them on a graceful stop, which a job
+    busy in native code (reading a workbook, say) can outlast, and the
+    container is left behind. Jobs are idempotent, so nothing is lost by
+    removing the container straight away: the next run redoes the period.
+    """
+
+    def on_kill(self) -> None:
+        if self.hook.client_created and self.container is not None:
+            self.log.info("Removing the container of the killed task")
+            self.cli.remove_container(self.container["Id"], force=True)
+
+
 def job(
     task_id: str,
     image: str,
@@ -82,10 +98,10 @@ def job(
     environment: dict[str, str] | None = None,
     skip_on_exit_code: int | None = None,
     retries: int | None = None,
-) -> DockerOperator:
+) -> JobOperator:
     # None keeps the retries of default_args.
     extra = {} if retries is None else {"retries": retries}
-    return DockerOperator(
+    return JobOperator(
         **extra,
         task_id=task_id,
         image=image,

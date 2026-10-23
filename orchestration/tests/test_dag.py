@@ -95,6 +95,7 @@ def test_every_task_retries_and_reports_its_final_failure(dag):
 def test_tasks_reach_docker_only_through_the_proxy(dag):
     for task in dag.tasks:
         assert isinstance(task, DockerOperator), task.task_id
+        assert type(task).__name__ == "JobOperator", task.task_id
         assert task.docker_url == "tcp://docker-proxy:2375", task.task_id
         assert task.network_mode == "quetzal-lakehouse_default", task.task_id
         assert task.mount_tmp_dir is False, task.task_id
@@ -134,4 +135,19 @@ def test_freshness_uses_a_duckdb_file_of_its_own(dag):
     assert freshness.environment["DBT_DUCKDB_PATH"] == "/tmp/freshness.duckdb"
     assert freshness.mounts == []
     assert freshness.environment["DBT_TARGET"] == "prod"
+
+
+def test_a_killed_task_removes_its_container_at_once(dag):
+    # No graceful stop to wait for: one forced removal, which kills it.
+    from unittest import mock
+
+    task = dag.get_task("dbt_build")
+    client = mock.Mock()
+    with mock.patch.object(type(task), "hook", mock.PropertyMock()) as hook, \
+            mock.patch.object(type(task), "cli", mock.PropertyMock(return_value=client)):
+        hook.return_value.client_created = True
+        task.container = {"Id": "abc123"}
+        task.on_kill()
+    client.remove_container.assert_called_once_with("abc123", force=True)
+    client.stop.assert_not_called()
 
