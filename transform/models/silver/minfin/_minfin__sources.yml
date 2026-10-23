@@ -20,10 +20,11 @@ sources:
         license: CC BY (2025); not stated (2026)
         personal_data: none
     # The ministry updates the current year about once a month, and someone
-    # has to download it.
+    # has to download it. The error is the reminder: the daily freshness task
+    # fails, and its failure alert reaches that person.
     freshness:
-      warn_after: {count: 35, period: day}
-      error_after: {count: 70, period: day}
+      warn_after: {count: 30, period: day}
+      error_after: {count: 35, period: day}
     tables:
       - name: central_government_expenditure
         description: >
