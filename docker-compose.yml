@@ -325,16 +325,48 @@ services:
 
   airflow-scheduler:
     # With the local executor, tasks run inside the scheduler, so this is the
-    # container that talks to Docker.
+    # container that starts the job containers. It does not mount the Docker
+    # socket: it reaches Docker only through docker-proxy, on a network the
+    # two of them share with nothing else.
     <<: *airflow
     command: ["airflow", "scheduler"]
+    networks: [default, docker-api]
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      docker-proxy:
+        condition: service_started
+
+  docker-proxy:
+    # The only container with the Docker socket, mounted read-only. It lets
+    # through the calls the DockerOperator makes (version, the image check,
+    # and creating, starting, waiting for, reading the logs of and removing
+    # containers) and refuses the rest: exec into other containers, builds,
+    # volumes, networks, system calls. It cannot stop a task from creating a
+    # container that mounts the host, so it narrows what Airflow can do
+    # without making it safe to run untrusted DAGs.
+    image: lscr.io/linuxserver/socket-proxy:3.4.6-r0-ls101
+    profiles: ["airflow"]
+    environment:
+      VERSION: "1"
+      PING: "1"
+      IMAGES: "1"
+      CONTAINERS: "1"
+      POST: "1"
+      ALLOW_START: "1"
+      EVENTS: "0"
+      EXEC: "0"
+      BUILD: "0"
+      VOLUMES: "0"
+      NETWORKS: "0"
+      SYSTEM: "0"
+      INFO: "0"
     volumes:
-      - ./orchestration/dags:/opt/airflow/dags:ro
-      - airflow-logs:/opt/airflow/logs
-      # Control over Docker on this machine. Acceptable for local development;
-      # it is what lets a task start a container.
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on: *after-init
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [docker-api]
+    read_only: true
+    tmpfs:
+      - /run
 
   n8n:
     # Routes and formats notifications, at http://localhost:5678. It moves no
@@ -396,3 +428,10 @@ volumes:
   airflow-db-data:
   airflow-logs:
   n8n-data:
+
+networks:
+  default:
+  # Only the Airflow scheduler and docker-proxy are on it, so no other
+  # container can ask the proxy for anything. Internal: it has no way out.
+  docker-api:
+    internal: true

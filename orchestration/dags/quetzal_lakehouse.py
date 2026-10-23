@@ -90,7 +90,8 @@ def job(
         # Airflow container, which the Docker daemon cannot see.
         mount_tmp_dir=False,
         auto_remove="force",
-        docker_url="unix://var/run/docker.sock",
+        # Docker is reached through the socket proxy, never the socket itself.
+        docker_url="tcp://docker-proxy:2375",
     )
 
 
