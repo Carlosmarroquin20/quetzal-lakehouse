@@ -177,6 +177,10 @@ command can follow the service name, for example
 dashboard runs from its image too, so a change to it needs
 `docker compose up -d --build dashboard`.
 
+A separate workflow (`.github/workflows/docs.yml`) publishes the dbt
+documentation to GitHub Pages, at <https://carlosmarroquin20.github.io/quetzal-lakehouse/>, on every push to main
+that changes the dbt project.
+
 GitHub Actions runs the same tests on every push and pull request
 (`.github/workflows/ci.yml`), together with `dbt parse` and the unit tests of
 the silver models, `terraform fmt` and `validate`, a check of the Compose

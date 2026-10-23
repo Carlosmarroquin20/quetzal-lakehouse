@@ -290,9 +290,17 @@ fixed start to the end of the current year instead of from the dates present
 in a fact table, so every fact table can share it. Awards use it twice, for
 the day of the award and the day the tender was published.
 
-**Documentation is served locally.** `dbt docs` is exposed as a Compose
-service. Publishing it would need a CI workflow that runs the whole pipeline
-and is left for later.
+**Documentation published without data.** A workflow generates the dbt
+documentation on every push to main that touches the dbt project and
+publishes it to GitHub Pages. Its catalog is empty: filling it means querying
+the built tables, which only exist after a run against the object store, and
+running the pipeline in CI was rejected (see
+[Continuous integration](#continuous-integration)). The site keeps every
+model, description, test, source and exposure, and the lineage; it lacks the
+column types and row counts read from the tables, which the `docs` Compose
+service still shows locally after a build. Generating the site locally and
+committing it was rejected too: it would go stale with the next change to a
+model.
 
 ## Orchestration
 

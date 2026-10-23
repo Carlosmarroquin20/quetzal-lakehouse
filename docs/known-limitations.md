@@ -49,7 +49,10 @@
 - `dim_currency` is maintained by hand from a seed file.
 - The hash keys make the fact tables unreadable without joining the
   dimensions.
-- The documentation site is only available to someone running the project.
+- The published documentation has no catalog: column types and row counts
+  appear only in the local `docs` service, after a build.
+- The exposure of the dashboard links to `localhost`, so on the published
+  site that link only works on a machine running the project.
 - The freshness check is a separate command and is not part of `dbt build`.
 
 ## Governance

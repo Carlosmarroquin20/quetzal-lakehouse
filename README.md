@@ -160,6 +160,7 @@ documentation site, Airflow and development.
 
 | Document | What it covers |
 |---|---|
+| [dbt documentation](https://carlosmarroquin20.github.io/quetzal-lakehouse/) | Every model, column, test and source, and the lineage graph from the sources to the dashboard, published from main. |
 | [Getting started](docs/getting-started.md) | Every step to run the project, the dbt documentation site, Airflow, and development. |
 | [Data model](docs/data-model.md) | The bronze, silver and gold layouts, the star schema with example queries, and the dashboard. |
 | [Data quality](docs/data-quality.md) | What profiling each source found, and the tests that encode it. |
@@ -178,9 +179,8 @@ AWS storage and roles, and the notifications.
 
 Not built: an actual AWS deployment (container images, scheduled tasks, the
 dashboard behind a login), which would cost money to run; see
-[AWS](docs/aws.md#what-a-deployment-would-add). Nor publishing the dbt
-documentation, for example on GitHub Pages, or a table format for silver and
-gold.
+[AWS](docs/aws.md#what-a-deployment-would-add). Nor a table format for
+silver and gold.
 
 ## Data sources
 

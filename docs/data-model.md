@@ -71,8 +71,8 @@ SHA-256 of the workbook as metadata.
 ## Silver layout
 
 Silver holds typed tables with English column names, one Parquet file each in
-the silver bucket. Column by column descriptions are in the dbt documentation
-site.
+the silver bucket. Column by column descriptions are in the
+[dbt documentation](https://carlosmarroquin20.github.io/quetzal-lakehouse/).
 
 | Model | One row per | Rows | Main columns |
 |---|---|---|---|
@@ -91,7 +91,7 @@ Gold is a dimensional model: three fact tables that share dimensions. The
 date and currency dimensions are shared by exchange rates and awards; the
 entity dimension links awards (through the buyer) with the budget. Each table
 is one Parquet file in the gold bucket, under a folder with the table's name.
-Columns and their descriptions are in the dbt documentation site.
+Columns and their descriptions are in the [dbt documentation](https://carlosmarroquin20.github.io/quetzal-lakehouse/).
 
 ```mermaid
 erDiagram
