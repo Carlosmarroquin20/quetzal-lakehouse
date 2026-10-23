@@ -217,21 +217,28 @@ unit_tests:
     model: fct_awards
     given:
       - input: ref('stg_guatecompras__awards')
-        rows:
-          - {award_id: A1, ocid: P1, status: active, awarded_date: 2026-09-01, amount: 770.00, currency_code: GTQ, supplier_id: S1}
-          - {award_id: A2, ocid: P1, status: cancelled, awarded_date: 2026-09-02, amount: 1000.00, currency_code: GTQ, supplier_id: S2}
+        # SQL with explicit types, so dbt does not need the upstream table
+        # to exist to learn its columns: the test runs without a store.
+        format: sql
+        rows: |
+          select 'A1' as award_id, 'P1' as ocid, 'active' as status, date '2026-09-01' as awarded_date, 770.00::decimal(18, 2) as amount, 'GTQ' as currency_code, 'S1' as supplier_id
+          union all
+          select 'A2', 'P1', 'cancelled', date '2026-09-02', 1000.00::decimal(18, 2), 'GTQ', 'S2'
       - input: ref('stg_guatecompras__processes')
-        rows:
-          - {ocid: P1, tender_id: T1, published_date: 2026-08-31, buyer_id: B1, procurement_method_details: Example procedure, procurement_method: open, procurement_category: goods}
+        format: sql
+        rows: |
+          select 'P1' as ocid, 'T1' as tender_id, date '2026-08-31' as published_date, 'B1' as buyer_id, 'Example procedure' as procurement_method_details, 'open' as procurement_method, 'goods' as procurement_category
       - input: ref('fct_exchange_rates')
-        rows:
-          - {date_key: 20260901, currency_key: usd, reference_rate: 7.7000000}
-          - {date_key: 20260902, currency_key: usd, reference_rate: 8.0000000}
-          - {date_key: 20260901, currency_key: other, reference_rate: 1.0000000}
+        format: sql
+        rows: |
+          select 20260901 as date_key, 'usd' as currency_key, 7.7000000::decimal(11, 7) as reference_rate
+          union all select 20260902, 'usd', 8.0000000::decimal(11, 7)
+          union all select 20260901, 'other', 1.0000000::decimal(11, 7)
       - input: ref('dim_currency')
-        rows:
-          - {currency_key: usd, currency_code: USD}
-          - {currency_key: other, currency_code: XXX}
+        format: sql
+        rows: |
+          select 'usd' as currency_key, 'USD' as currency_code
+          union all select 'other', 'XXX'
     expect:
       rows:
         - {award_id: A1, award_date_key: 20260901, published_date_key: 20260831, procurement_category: goods, is_cancelled: false, awarded_amount: 770.00, awarded_amount_gtq: 770.00, awarded_amount_usd: 100.00}
@@ -245,10 +252,13 @@ unit_tests:
     model: dim_supplier
     given:
       - input: ref('stg_guatecompras__suppliers')
-        rows:
-          - {supplier_id: GT-NIT-1, supplier_name: EXAMPLE COMPANY S.A., identifier_scheme: GT-NIT, legal_type: "SOCIEDAD ANÓNIMA"}
-          - {supplier_id: GT-NIT-2, supplier_name: JANE EXAMPLE, identifier_scheme: GT-NIT, legal_type: INDIVIDUAL}
-          - {supplier_id: GT-GCID-3, supplier_name: FOREIGN EXAMPLE, identifier_scheme: GT-GCID, legal_type: null}
+        # SQL with explicit types, so dbt does not need the upstream table
+        # to exist to learn its columns: the test runs without a store.
+        format: sql
+        rows: |
+          select 'GT-NIT-1' as supplier_id, 'EXAMPLE COMPANY S.A.' as supplier_name, 'GT-NIT' as identifier_scheme, 'SOCIEDAD ANÓNIMA' as legal_type
+          union all select 'GT-NIT-2', 'JANE EXAMPLE', 'GT-NIT', 'INDIVIDUAL'
+          union all select 'GT-GCID-3', 'FOREIGN EXAMPLE', 'GT-GCID', null::varchar
     expect:
       rows:
         - {supplier_id: GT-NIT-1, supplier_name: EXAMPLE COMPANY S.A., is_natural_person: false, is_masked: false}

@@ -145,18 +145,24 @@ unit_tests:
     model: fct_exchange_rates
     given:
       - input: ref('stg_banguat__exchange_rates')
-        rows:
-          - {rate_date: 2000-04-01, currency_code: USD, buy_rate: 7.711940, sell_rate: 7.721870}
-          - {rate_date: 2000-04-03, currency_code: USD, buy_rate: 7.711340, sell_rate: 7.721381}
+        # SQL with explicit types, so dbt does not need the upstream table
+        # to exist to learn its columns: the test runs without a store.
+        format: sql
+        rows: |
+          select date '2000-04-01' as rate_date, 'USD' as currency_code, 7.711940::decimal(10, 6) as buy_rate, 7.721870::decimal(10, 6) as sell_rate
+          union all
+          select date '2000-04-03', 'USD', 7.711340::decimal(10, 6), 7.721381::decimal(10, 6)
       - input: ref('dim_date')
-        rows:
-          - {date_key: 20000401, date_day: 2000-04-01}
-          - {date_key: 20000402, date_day: 2000-04-02}
-          - {date_key: 20000403, date_day: 2000-04-03}
-          - {date_key: 20000404, date_day: 2000-04-04}
+        format: sql
+        rows: |
+          select 20000401 as date_key, date '2000-04-01' as date_day
+          union all select 20000402, date '2000-04-02'
+          union all select 20000403, date '2000-04-03'
+          union all select 20000404, date '2000-04-04'
       - input: ref('dim_currency')
-        rows:
-          - {currency_key: usd-key, currency_code: USD}
+        format: sql
+        rows: |
+          select 'usd-key' as currency_key, 'USD' as currency_code
     expect:
       rows:
         - date_key: 20000401

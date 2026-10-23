@@ -262,15 +262,19 @@ unit_tests:
     model: dim_entity
     given:
       - input: ref('stg_minfin__central_government_expenditure')
-        rows:
-          - {entity_code: "11130009", entity_name: MINISTERIO DE SALUD PUBLICA, fiscal_year: 2026}
+        # SQL with explicit types, so dbt does not need the upstream table
+        # to exist to learn its columns: the test runs without a store.
+        format: sql
+        rows: |
+          select '11130009' as entity_code, 'MINISTERIO DE SALUD PUBLICA' as entity_name, 2026 as fiscal_year
       - input: ref('stg_guatecompras__processes')
-        rows:
-          - {entity_code: "11130009", buyer_name: HOSPITAL REGIONAL, entity_type: Central, entity_sector: Public, updated_at: "2026-09-01 10:00:00-06"}
-          - {entity_code: "12100101", buyer_name: MUNICIPALIDAD DE GUATEMALA, entity_type: Local, entity_sector: Public, updated_at: "2026-09-01 10:00:00-06"}
-          - {entity_code: "12100101", buyer_name: MUNICIPALIDAD DE GUATEMALA, entity_type: Local, entity_sector: Public, updated_at: "2026-09-02 10:00:00-06"}
-          - {entity_code: "12100101", buyer_name: FIDEICOMISO MUNICIPAL, entity_type: Local, entity_sector: Public, updated_at: "2026-09-03 10:00:00-06"}
-          - {entity_code: null, buyer_name: BUYER WITHOUT ENTITY, entity_type: null, entity_sector: null, updated_at: "2026-09-03 10:00:00-06"}
+        format: sql
+        rows: |
+          select '11130009' as entity_code, 'HOSPITAL REGIONAL' as buyer_name, 'Central' as entity_type, 'Public' as entity_sector, timestamptz '2026-09-01 10:00:00-06' as updated_at
+          union all select '12100101', 'MUNICIPALIDAD DE GUATEMALA', 'Local', 'Public', timestamptz '2026-09-01 10:00:00-06'
+          union all select '12100101', 'MUNICIPALIDAD DE GUATEMALA', 'Local', 'Public', timestamptz '2026-09-02 10:00:00-06'
+          union all select '12100101', 'FIDEICOMISO MUNICIPAL', 'Local', 'Public', timestamptz '2026-09-03 10:00:00-06'
+          union all select null::varchar, 'BUYER WITHOUT ENTITY', null::varchar, null::varchar, timestamptz '2026-09-03 10:00:00-06'
     expect:
       rows:
         - {entity_code: "11130009", entity_name: MINISTERIO DE SALUD PUBLICA, name_source: MINFIN, entity_type: Central, has_budget_data: true, has_procurement_data: true}
