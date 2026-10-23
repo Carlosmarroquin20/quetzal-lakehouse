@@ -41,6 +41,10 @@ COPY --chown=dashboard views ./views
 # image, so there are no files to watch for changes, and viewers get no
 # developer menu.
 EXPOSE 8501
+# Python runs as process 1 here, and Linux delivers no SIGTERM to process 1
+# unless it handles it, so `docker stop` would wait ten seconds and kill it.
+# Python does handle SIGINT, and stops in under a second.
+STOPSIGNAL SIGINT
 ENTRYPOINT ["streamlit", "run", "app.py", \
     "--server.address=0.0.0.0", "--server.port=8501", \
     "--server.headless=true", "--server.fileWatcherType=none", \

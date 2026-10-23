@@ -43,5 +43,11 @@ COPY --chown=transform models ./models
 COPY --chown=transform seeds ./seeds
 COPY --chown=transform tests ./tests
 
+# Python runs as process 1 here, and Linux delivers no SIGTERM to process 1
+# unless it handles it, so `docker stop` would wait ten seconds and kill it.
+# Python does handle SIGINT, and stops in under a second. That matters when
+# Airflow kills a task: it gives the task about ten seconds to stop and
+# remove its container before killing it too.
+STOPSIGNAL SIGINT
 ENTRYPOINT ["dbt"]
 CMD ["build"]

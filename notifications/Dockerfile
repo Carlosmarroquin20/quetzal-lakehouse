@@ -32,4 +32,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 # credentials the standard AWS way when no key pair is given.
 RUN python -c "import duckdb; c = duckdb.connect(); c.install_extension('httpfs'); c.install_extension('aws')"
 
+# Python runs as process 1 here, and Linux delivers no SIGTERM to process 1
+# unless it handles it, so `docker stop` would wait ten seconds and kill it.
+# Python does handle SIGINT, and stops in under a second. That matters when
+# Airflow kills a task: it gives the task about ten seconds to stop and
+# remove its container before killing it too.
+STOPSIGNAL SIGINT
 ENTRYPOINT ["python", "-m", "quetzal_notifications"]

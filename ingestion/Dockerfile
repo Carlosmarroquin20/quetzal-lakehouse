@@ -27,4 +27,10 @@ RUN useradd --create-home ingestion
 USER ingestion
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Python runs as process 1 here, and Linux delivers no SIGTERM to process 1
+# unless it handles it, so `docker stop` would wait ten seconds and kill it.
+# Python does handle SIGINT, and stops in under a second. That matters when
+# Airflow kills a task: it gives the task about ten seconds to stop and
+# remove its container before killing it too.
+STOPSIGNAL SIGINT
 ENTRYPOINT ["python", "-m", "quetzal_ingestion"]
