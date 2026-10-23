@@ -1,0 +1,73 @@
+# Publishes the dbt documentation site, with the lineage graph, to GitHub
+# Pages on every push to main that touches the dbt project.
+#
+# The catalog is left empty: filling it means querying the built tables,
+# which only exist after a run against the object store. The site still
+# has every model, column description, test, source and exposure, and the
+# lineage from the sources to the dashboard and the digest; what it lacks
+# are the column types and row counts read from the tables.
+name: dbt docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "transform/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time, and a newer push never cancels one under way.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: transform
+    # The prod target with the bucket names of .env.example, so the compiled
+    # SQL on the site shows real locations. Nothing here reaches a store; the
+    # key pair keeps DuckDB from searching the AWS credential chain.
+    env:
+      DBT_TARGET: prod
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: docs-placeholder
+      S3_SECRET_ACCESS_KEY: docs-placeholder
+      S3_BUCKET_BRONZE: quetzal-bronze
+      S3_BUCKET_SILVER: quetzal-silver
+      S3_BUCKET_GOLD: quetzal-gold
+      PSEUDONYMIZATION_KEY: docs-placeholder
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.9"
+          cache-suffix: docs
+      - run: uv sync --frozen
+      - run: uv run dbt deps
+      # --static writes the whole site, data included, into one HTML file.
+      - run: uv run dbt docs generate --empty-catalog --static
+      - run: mkdir -p ../site && cp target/static_index.html ../site/index.html
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    # Only this job can publish, and only to Pages.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
