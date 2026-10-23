@@ -42,6 +42,12 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    # A new major version of Postgres does not start on data files written by
+    # the previous one. Moving Airflow's database is a migration, done by hand
+    # with a backup, not a version bump.
+    ignore:
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
     groups:
       compose-images:
         update-types: [minor, patch]
