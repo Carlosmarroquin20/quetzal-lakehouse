@@ -1,7 +1,7 @@
 # Checks every push and pull request without any service or credential:
-# tests, the dbt project, the Terraform configuration, the Compose file,
-# known vulnerabilities in the locked dependencies, and secrets in the
-# history. Actions are pinned to a commit, not a tag, so a moved tag cannot
+# tests, the dbt project and its unit tests, the Airflow DAG, the Terraform
+# configuration, the Compose file, known vulnerabilities in the locked
+# dependencies and in the images, and secrets in the history. Actions are pinned to a commit, not a tag, so a moved tag cannot
 # change what runs here.
 name: CI
 
@@ -71,10 +71,25 @@ jobs:
       - run: uv sync --frozen
       - run: uv run dbt deps
       - run: uv run dbt parse
-      # The unit tests of silver models run on fixtures alone. Those of gold
-      # models need the silver tables to exist, which takes a build against
-      # the object store, so they run with every `dbt build` instead.
-      - run: uv run dbt test --select "test_type:unit,path:models/silver"
+      # Every unit test runs on fixtures alone: those of gold models give
+      # their inputs as typed SQL, so dbt does not need the silver tables.
+      - run: uv run dbt test --select test_type:unit
+
+  dag:
+    name: Airflow DAG
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The DAG is loaded by the Airflow image the stack runs, read from the
+      # Compose file so the test follows it when the version changes.
+      - run: cp .env.example .env
+      - run: |
+          image=$(docker compose --profile airflow config --images | grep '^apache/airflow:' | head -n 1)
+          echo "Testing the DAG in $image"
+          docker run --rm -v "$PWD/orchestration:/opt/orchestration:ro" \
+            -w /opt/orchestration -e AIRFLOW__CORE__LOAD_EXAMPLES=false \
+            --entrypoint bash "$image" -c \
+            "pip install -q pytest==9.1.1 && python -m pytest -p no:cacheprovider tests"
 
   terraform:
     name: Terraform
@@ -126,6 +141,25 @@ jobs:
       - run: >-
           uvx pip-audit==${{ env.PIP_AUDIT_VERSION }}
           -r requirements.txt --no-deps --disable-pip --progress-spinner off
+
+  image-scan:
+    name: Image scan (${{ matrix.image }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ingestion, transform, dashboard, notifications]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -t "quetzal-lakehouse-${{ matrix.image }}" "${{ matrix.image }}"
+      # Operating system packages and everything else in the image, not only
+      # the Python lock file. Fails on a high or critical vulnerability that
+      # has a fix; one without a fix cannot be acted on and is not reported.
+      - run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.75.0 image --quiet --scanners vuln
+          --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+          "quetzal-lakehouse-${{ matrix.image }}"
 
   secrets:
     name: Secrets in the history
