@@ -315,7 +315,21 @@ ingestion or transform image as a container, exactly like `docker compose
 run`. Installing the jobs and dbt inside the Airflow image was rejected: three
 sets of dependencies would share one environment and could clash, and the
 jobs would no longer run the same way with or without Airflow. The price is
-the Docker socket, mounted into the scheduler.
+access to Docker from the scheduler.
+
+**Docker through a proxy, not the socket.** The scheduler used to mount the
+Docker socket, which is full control over Docker on the machine. Now only
+`docker-proxy` mounts it, read-only, and lets through the calls the
+DockerOperator makes: the version, the image check, and creating, starting,
+waiting for, reading the logs of and removing containers. Everything else
+is refused with a 403: running commands inside other containers, builds,
+volumes, networks and system calls. The proxy sits on an internal network it
+shares only with the scheduler, so no other container can reach it. It is
+defense in depth, not isolation: the proxy filters by kind of call, not by
+content, so a task can still create a container that mounts the host. Closing
+that takes a Docker daemon without root or an authorization plugin; on AWS
+the question disappears, because ECS starts the tasks and Airflow never
+touches Docker.
 
 **One DAG, one dbt task.** The three ingestion tasks run in parallel, since
 they share nothing, and `dbt build` runs once all of them succeed. dbt

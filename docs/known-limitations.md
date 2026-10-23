@@ -71,8 +71,12 @@
   not run later; the next run refreshes everything anyway.
 - The Airflow interface has no login. It is published on loopback only, for
   local development.
-- Airflow reaches Docker through its socket, which gives it full control
-  over Docker on this machine.
+- Airflow reaches Docker through a proxy that refuses exec, builds,
+  volumes, networks and system calls, but still lets it create containers,
+  and a container can be created with the host mounted. Untrusted DAGs must
+  not run on this stack.
+- When Airflow kills a task, the DockerOperator stops its container but does
+  not remove it; stopped job containers have to be removed by hand.
 - The DAG itself has no automated tests; only its failure callback does. It
   was checked by parsing it in Airflow and by running it end to end.
 - Everything shares one virtual machine of Docker Desktop. During one run a
