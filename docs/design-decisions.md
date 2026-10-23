@@ -31,6 +31,18 @@ gold. A bucket is created when its layer is built.
 may change between releases. Pinning `4.48` keeps `docker compose up`
 reproducible.
 
+**Every outside image pinned by digest too.** A tag can be moved to point at
+a different image: `python:3.13-slim` is moved every few days, and a
+compromised repository could move any tag. Every image the stack pulls, and
+the bases of the project's images, carry their digest next to the tag, so
+Docker refuses anything but the image that was reviewed. The digest is that
+of the multi-platform index, so the same line works on any machine.
+Dependabot moves tag and digest together. The two images the CI workflow
+names in a `docker run` step, gitleaks and Trivy, keep a version tag only:
+Dependabot does not update images written there, so a digest would never
+move. The Airflow image of the DAG tests is read from the Compose file,
+digest included.
+
 **Port published on loopback only.** The S3 port is bound to `127.0.0.1`, so
 the store is reachable from the development machine and not from the network.
 
@@ -331,16 +343,20 @@ that takes a Docker daemon without root or an authorization plugin; on AWS
 the question disappears, because ECS starts the tasks and Airflow never
 touches Docker.
 
-**Job containers stop on SIGINT.** When Airflow kills a task it gives it
-about ten seconds, in two five-second steps, before killing it outright, and
-in that time the operator stops the task's container and removes it. A job
+**A killed task removes its container at once.** When Airflow kills a task,
+it gives it five seconds before killing it outright. The stock operator
+spends them on a graceful `docker stop` and only then removes the container,
+so killed tasks left stopped containers behind. Two causes stacked up. A job
 runs as process 1 of its container, and Linux delivers no SIGTERM to
-process 1 unless it handles it, so `docker stop` waited its full ten seconds
-and the task died before the removal: killed tasks left stopped containers
-behind. Python handles SIGINT, so the images set it as their stop signal;
-`docker stop` now takes under a second (dbt about four, as it cancels), and
-the container is removed. An init process such as tini would have forwarded
-SIGTERM too, but it adds a binary to every image for what one line does.
+process 1 unless it handles it, so `docker stop` waited ten seconds; the
+images now stop on SIGINT, which Python handles, and stop in under a second.
+That was not enough: a job busy in native code, such as reading a workbook,
+does not act on a signal until it returns to Python, and one took more than
+five seconds. So the DAG uses a small subclass of the operator whose
+`on_kill` removes the container with force straight away, in a third of a
+second. Nothing is lost: every job is idempotent, and the next run redoes
+the whole period. An init process such as tini would have forwarded SIGTERM,
+but it would not have helped the second cause.
 
 **One DAG, one dbt task.** The three ingestion tasks run in parallel, since
 they share nothing, and `dbt build` runs once all of them succeed. dbt

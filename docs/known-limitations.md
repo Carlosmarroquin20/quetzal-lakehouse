@@ -158,3 +158,8 @@
   Dependabot.
 - The image scan ignores vulnerabilities without a fix, which cannot be acted
   on but still exist.
+- gitleaks and Trivy, run by the CI workflow, are pinned by version tag
+  only, and nothing updates them; a new release has to be adopted by hand.
+- A pinned digest also freezes the operating system patches of the base
+  image until Dependabot proposes the next one: it checks weekly and waits
+  seven days after a release, so up to about two weeks.
