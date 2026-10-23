@@ -10,8 +10,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.9 /uv /usr/local/bin/uv
 RUN pip uninstall --yes --quiet pip
 
 WORKDIR /app
+# No download cache: it would stay in the image as a second copy of every
+# package.
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    UV_NO_CACHE=1 \
     PATH="/app/.venv/bin:$PATH"
 
 # Dependencies go in their own layer, rebuilt only when the lockfile changes.
