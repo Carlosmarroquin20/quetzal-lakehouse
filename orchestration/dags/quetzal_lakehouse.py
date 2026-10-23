@@ -81,8 +81,12 @@ def job(
     mounts: list[Mount] | None = None,
     environment: dict[str, str] | None = None,
     skip_on_exit_code: int | None = None,
+    retries: int | None = None,
 ) -> DockerOperator:
+    # None keeps the retries of default_args.
+    extra = {} if retries is None else {"retries": retries}
     return DockerOperator(
+        **extra,
         task_id=task_id,
         image=image,
         command=command,
@@ -159,6 +163,20 @@ with DAG(
         ],
     )
 
+    # Fails when a source has gone longer without a new load than its error
+    # threshold allows, and the failure alert says so. It runs beside dbt, so
+    # stale data is reported without holding back the build, on a DuckDB file
+    # of its own so the two never compete for one. Retrying would not make a
+    # source any fresher.
+    source_freshness = job(
+        "check_source_freshness",
+        TRANSFORM_IMAGE,
+        ["source", "freshness"],
+        TRANSFORM_SECRETS,
+        environment={"DBT_DUCKDB_PATH": "/tmp/freshness.duckdb"},
+        retries=0,
+    )
+
     # The day the digest reports on is the day of the run in Guatemala,
     # which the job works out itself; the run ID lets a message be traced
     # back to its run.
@@ -171,4 +189,6 @@ with DAG(
         skip_on_exit_code=DIGEST_NOT_CONFIGURED,
     )
 
-    [exchange_rates, contracting_processes, budget_execution] >> dbt_build >> daily_digest
+    ingestion = [exchange_rates, contracting_processes, budget_execution]
+    ingestion >> dbt_build >> daily_digest
+    ingestion >> source_freshness

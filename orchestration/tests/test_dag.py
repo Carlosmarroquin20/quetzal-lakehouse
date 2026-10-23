@@ -58,8 +58,13 @@ def test_the_tasks_run_in_order(dag):
         "ingest_contracting_processes",
         "ingest_budget_execution",
     }
-    assert set(dag.task_ids) == ingestion | {"dbt_build", "send_daily_digest"}
+    assert set(dag.task_ids) == ingestion | {
+        "dbt_build",
+        "send_daily_digest",
+        "check_source_freshness",
+    }
     assert dag.get_task("dbt_build").upstream_task_ids == ingestion
+    assert dag.get_task("check_source_freshness").upstream_task_ids == ingestion
     assert dag.get_task("send_daily_digest").upstream_task_ids == {"dbt_build"}
     for task_id in ingestion:
         assert dag.get_task(task_id).upstream_task_ids == set()
@@ -76,8 +81,12 @@ def test_every_task_retries_and_reports_its_final_failure(dag):
     from failure_alerts import report_failure
 
     for task in dag.tasks:
-        assert task.retries == 2, task.task_id
-        assert task.retry_delay == timedelta(minutes=10), task.task_id
+        if task.task_id == "check_source_freshness":
+            # A stale source is not fixed by trying again.
+            assert task.retries == 0
+        else:
+            assert task.retries == 2, task.task_id
+            assert task.retry_delay == timedelta(minutes=10), task.task_id
         callbacks = task.on_failure_callback
         callbacks = callbacks if isinstance(callbacks, list) else [callbacks]
         assert report_failure in callbacks, task.task_id
@@ -115,3 +124,14 @@ def test_the_digest_is_skipped_when_no_webhook_is_set(dag):
     digest = dag.get_task("send_daily_digest")
     skip = digest.skip_on_exit_code
     assert 3 in (skip if isinstance(skip, (list, set, tuple)) else [skip])
+
+
+def test_freshness_uses_a_duckdb_file_of_its_own(dag):
+    # dbt_build keeps its DuckDB file in a volume; two processes cannot open
+    # one file at once, and the two tasks run side by side.
+    freshness = dag.get_task("check_source_freshness")
+    assert freshness.command == ["source", "freshness"]
+    assert freshness.environment["DBT_DUCKDB_PATH"] == "/tmp/freshness.duckdb"
+    assert freshness.mounts == []
+    assert freshness.environment["DBT_TARGET"] == "prod"
+
