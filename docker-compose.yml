@@ -1,7 +1,11 @@
 name: quetzal-lakehouse
 
+# Every outside image is pinned by tag and digest. A tag can be moved to
+# point at a different image; the digest cannot, so `docker compose pull`
+# always gets the image that was reviewed. Dependabot updates both together.
+
 x-airflow: &airflow
-  image: apache/airflow:3.3.2
+  image: apache/airflow:3.3.2@sha256:e9982ad3f49a60418622e1baf80c34b0daf3fa5091a336cb5ee61f0cdd189371
   profiles: ["airflow"]
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -56,7 +60,7 @@ services:
     # by S3 itself with no code changes.
     # The tag is pinned because the image's all-in-one defaults (ports,
     # bundled components) may change between releases.
-    image: chrislusf/seaweedfs:4.48
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
     environment:
       # The administrator key pair. Jobs do not use it: each role has its
       # own key pair, created by storage-init. Mapped from project-specific
@@ -85,7 +89,7 @@ services:
     # Creates one identity per role, each allowed only what its role needs.
     # Runs on every start and ends; applying the same identities again
     # changes nothing.
-    image: chrislusf/seaweedfs:4.48
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
     entrypoint: ["sh", "-c"]
     command:
       - |
@@ -245,7 +249,7 @@ services:
   # infra/aws and the jobs against it without an AWS account. Start it with
   # `docker compose --profile aws up -d aws-emulator`; see docs/aws.md.
   aws-emulator:
-    image: motoserver/moto:5.2.4
+    image: motoserver/moto:5.2.4@sha256:120b1589c6df7e35d2092935f6ff724486bb2c4189d0e36ce795baba1400ffd2
     profiles: ["aws"]
     networks:
       default:
@@ -262,7 +266,7 @@ services:
     # Terraform without installing it: `docker compose --profile aws run
     # --rm terraform <command>`. It talks to the emulator, with the dummy
     # credentials the emulator accepts; nothing reaches AWS.
-    image: hashicorp/terraform:1.16.6
+    image: hashicorp/terraform:1.16.6@sha256:bfffc1ded5fbf0a17beaaf22eb4793980abdb19d0761ff6a3a0efb2ab4d9b316
     profiles: ["aws"]
     working_dir: /infra
     environment:
@@ -280,7 +284,7 @@ services:
   # the ingestion or transform image as a container, through the Docker
   # socket. Start it with `docker compose --profile airflow up -d`.
   airflow-db:
-    image: postgres:17.7-alpine
+    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
     profiles: ["airflow"]
     environment:
       POSTGRES_USER: ${AIRFLOW_DB_USER:?set AIRFLOW_DB_USER in .env}
@@ -345,7 +349,7 @@ services:
     # volumes, networks, system calls. It cannot stop a task from creating a
     # container that mounts the host, so it narrows what Airflow can do
     # without making it safe to run untrusted DAGs.
-    image: lscr.io/linuxserver/socket-proxy:3.4.6-r0-ls101
+    image: lscr.io/linuxserver/socket-proxy:3.4.6-r0-ls101@sha256:362cadf55b3c7920189347d0f4d60b389e2f80e929581bf10793f2371aab41e5
     profiles: ["airflow"]
     environment:
       VERSION: "1"
@@ -374,7 +378,7 @@ services:
     # webhooks. Start it with `docker compose --profile notifications up -d`.
     # The tag is pinned because n8n releases often, and an upgrade can change
     # how stored workflows behave.
-    image: n8nio/n8n:2.44.2
+    image: n8nio/n8n:2.44.2@sha256:b57e7a9c8e5ab1a8fe9b03fff3158052aec65f571ed1f759897a20f306ad329d
     profiles: ["notifications"]
     environment:
       # Encrypts the credentials n8n stores, such as the bot token. Given here
