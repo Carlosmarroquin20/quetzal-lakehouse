@@ -63,6 +63,11 @@ NOTIFICATIONS = {
 # skipped instead of failed, so the pipeline runs the same without n8n.
 DIGEST_NOT_CONFIGURED = 3
 
+# Every container a task starts carries this label. When Airflow kills a
+# task, the operator removes its container; if the scheduler itself dies
+# first, the leftovers can be found by the label (docs/getting-started.md).
+JOB_LABEL = "quetzal-lakehouse.task"
+
 # Guatecompras is loaded from this month on. Months the source has not changed
 # are skipped by their checksum, so the whole range costs little to refresh.
 GUATECOMPRAS_FIRST_MONTH = "2025-01"
@@ -90,6 +95,7 @@ def job(
         # Airflow container, which the Docker daemon cannot see.
         mount_tmp_dir=False,
         auto_remove="force",
+        labels={JOB_LABEL: task_id},
         # Docker is reached through the socket proxy, never the socket itself.
         docker_url="tcp://docker-proxy:2375",
     )

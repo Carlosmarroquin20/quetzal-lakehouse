@@ -90,6 +90,7 @@ def test_tasks_reach_docker_only_through_the_proxy(dag):
         assert task.network_mode == "quetzal-lakehouse_default", task.task_id
         assert task.mount_tmp_dir is False, task.task_id
         assert task.auto_remove == "force", task.task_id
+        assert task.labels == {"quetzal-lakehouse.task": task.task_id}
 
 
 def test_secrets_never_go_through_the_rendered_environment(dag):
