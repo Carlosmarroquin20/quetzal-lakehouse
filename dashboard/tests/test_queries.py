@@ -6,6 +6,8 @@ import pytest
 
 from quetzal_dashboard import queries
 
+from gold_contract import conform_to_contract
+
 
 @pytest.fixture
 def con() -> duckdb.DuckDBPyConnection:
@@ -94,6 +96,7 @@ def con() -> duckdb.DuckDBPyConnection:
         );
         """
     )
+    conform_to_contract(con)
     return con
 
 

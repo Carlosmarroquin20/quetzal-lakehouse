@@ -3,6 +3,8 @@
 import duckdb
 import pytest
 
+from gold_contract import conform_to_contract
+
 
 @pytest.fixture
 def con() -> duckdb.DuckDBPyConnection:
@@ -75,8 +77,10 @@ def con() -> duckdb.DuckDBPyConnection:
             is_cancelled, awarded_amount_gtq, awarded_amount_usd
         );
 
+        -- Only counted; three budget lines of one year.
         create table fct_budget_execution as
-        select * from range(3) as t(budget_line);
+        select 2026 as fiscal_year from range(3);
         """
     )
+    conform_to_contract(con)
     return con
