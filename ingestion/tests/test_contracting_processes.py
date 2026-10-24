@@ -180,3 +180,110 @@ def test_month_range_must_be_within_what_the_service_offers(capsys):
             ["--from-month", "2026-02", "--to-month", "2026-01"]
         )
     assert "months must satisfy 2020-01 <= from-month" in capsys.readouterr().err
+
+
+class Months:
+    """Stands in for Guatecompras serving several months, some of them broken."""
+
+    def __init__(self, broken_checksum=(), unavailable=()):
+        self.documents = {
+            month: ocds_samples.package(
+                [ocds_samples.record(n, month=str(month)) for n in (1, 2)]
+            )
+            for month in (Month(2026, 7), Month(2026, 8), Month(2026, 9))
+        }
+        self.broken_checksum = set(broken_checksum)
+        self.unavailable = set(unavailable)
+
+    def client(self) -> httpx.Client:
+        def handler(request: httpx.Request) -> httpx.Response:
+            kind, year, number = request.url.path.split("/")[2:]
+            month = Month(int(year), int(number))
+            if month in self.unavailable:
+                return httpx.Response(503)
+            document = self.documents[month]
+            if kind == "sha":
+                published = ocds_samples.checksum(document)
+                return httpx.Response(
+                    200, text="0" * 64 if month in self.broken_checksum else published
+                )
+            return httpx.Response(
+                200, content=ocds_samples.archive(document, name=f"{month}_Guatecompras.json")
+            )
+
+        return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def ingest_three_months(s3, source: Months) -> list[str]:
+    with source.client() as http:
+        return contracting_processes.ingest_months(
+            [Month(2026, 7), Month(2026, 8), Month(2026, 9)],
+            http=http, s3=s3, bucket="bronze", ingested_at=INGESTED_AT,
+        )
+
+
+def stored_months(s3: FakeS3) -> set[str]:
+    return {
+        str(month)
+        for month in (Month(2026, 7), Month(2026, 8), Month(2026, 9))
+        if ("bronze", contracting_processes.parquet_key(month)) in s3.objects
+    }
+
+
+def test_a_broken_month_does_not_hold_back_the_months_after_it():
+    s3 = FakeS3()
+
+    failures = ingest_three_months(s3, Months(broken_checksum={Month(2026, 7)}))
+
+    assert stored_months(s3) == {"2026-08", "2026-09"}
+    assert len(failures) == 1
+    assert failures[0].startswith("2026-07: checksum of 2026-07")
+
+
+def test_a_broken_month_keeps_the_version_bronze_holds():
+    s3 = FakeS3()
+    ingest_three_months(s3, Months())
+    before = s3.objects[("bronze", contracting_processes.parquet_key(Month(2026, 8)))]
+
+    source = Months(broken_checksum={Month(2026, 8)})
+    source.documents[Month(2026, 8)] = ocds_samples.package(
+        [ocds_samples.record(n, month="2026-08") for n in (1, 2, 3)]
+    )
+    failures = ingest_three_months(s3, source)
+
+    assert [f[:7] for f in failures] == ["2026-08"]
+    assert s3.objects[("bronze", contracting_processes.parquet_key(Month(2026, 8)))] == before
+
+
+def test_a_month_the_service_cannot_serve_is_a_failure_of_that_month_only():
+    s3 = FakeS3()
+
+    failures = ingest_three_months(s3, Months(unavailable={Month(2026, 8)}))
+
+    assert stored_months(s3) == {"2026-07", "2026-09"}
+    assert [f[:7] for f in failures] == ["2026-08"]
+
+
+def test_an_unreachable_store_still_stops_the_run():
+    class BrokenS3(FakeS3):
+        def put_object(self, **_):
+            raise ClientError({"Error": {"Code": "ServiceUnavailable"}}, "PutObject")
+
+    with pytest.raises(ClientError):
+        ingest_three_months(BrokenS3(), Months())
+
+
+def test_the_run_fails_naming_the_months_it_could_not_load(monkeypatch):
+    monkeypatch.setattr(contracting_processes, "StorageSettings", type(
+        "Settings", (), {"from_env": staticmethod(lambda: type("S", (), {"bronze_bucket": "bronze"})())}
+    ))
+    monkeypatch.setattr(contracting_processes, "create_s3_client", lambda settings: FakeS3())
+    source = Months(broken_checksum={Month(2026, 8)})
+    monkeypatch.setattr(contracting_processes.runtime, "create_http_client", source.client)
+    monkeypatch.setattr(contracting_processes.runtime, "today_in_guatemala",
+                        lambda: datetime(2026, 9, 30).date())
+
+    with pytest.raises(SystemExit) as stopped:
+        contracting_processes.main(["--from-month", "2026-07", "--to-month", "2026-09"])
+
+    assert "1 month(s) not loaded: 2026-08: checksum of 2026-08" in str(stopped.value)

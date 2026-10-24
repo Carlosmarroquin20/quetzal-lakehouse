@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import io
 import logging
+import sys
 from datetime import UTC, datetime
 from typing import BinaryIO
 
@@ -219,6 +220,45 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     return args
 
 
+def ingest_months(
+    months,
+    *,
+    http: httpx.Client,
+    s3,
+    bucket: str,
+    ingested_at: datetime,
+    force: bool = False,
+) -> list[str]:
+    """Load each month on its own, and return what went wrong with each failure.
+
+    A month whose file the source serves broken, or whose request fails,
+    keeps the version bronze already holds, and the other months are still
+    loaded. Guatecompras regenerates its files in place, and a file caught
+    half rewritten would otherwise hold back every month after it. Errors that
+    are not about one month, such as the store being unreachable, still stop
+    the run at once.
+    """
+    failures: list[str] = []
+    for month in months:
+        try:
+            count = ingest_month(
+                month, http=http, s3=s3, bucket=bucket, ingested_at=ingested_at, force=force
+            )
+        except (GuatecomprasError, httpx.HTTPError) as error:
+            log.error("month=%s not loaded, bronze keeps its previous version: %s", month, error)
+            failures.append(f"{month}: {error}")
+            continue
+        if count is None:
+            log.info("month=%s unchanged at the source, skipped", month)
+        elif count == 0:
+            log.info("month=%s has no records yet, nothing stored", month)
+        else:
+            log.info(
+                "month=%s records=%s -> s3://%s/%s", month, count, bucket, parquet_key(month)
+            )
+    return failures
+
+
 def main(argv: list[str] | None = None) -> None:
     runtime.configure_logging()
     args = parse_args(argv)
@@ -227,27 +267,18 @@ def main(argv: list[str] | None = None) -> None:
     ingested_at = datetime.now(UTC)
 
     with runtime.create_http_client() as http:
-        for month in guatecompras.months_between(args.from_month, args.to_month):
-            count = ingest_month(
-                month,
-                http=http,
-                s3=s3,
-                bucket=settings.bronze_bucket,
-                ingested_at=ingested_at,
-                force=args.force,
-            )
-            if count is None:
-                log.info("month=%s unchanged at the source, skipped", month)
-            elif count == 0:
-                log.info("month=%s has no records yet, nothing stored", month)
-            else:
-                log.info(
-                    "month=%s records=%s -> s3://%s/%s",
-                    month,
-                    count,
-                    settings.bronze_bucket,
-                    parquet_key(month),
-                )
+        failures = ingest_months(
+            guatecompras.months_between(args.from_month, args.to_month),
+            http=http,
+            s3=s3,
+            bucket=settings.bronze_bucket,
+            ingested_at=ingested_at,
+            force=args.force,
+        )
+    # Every other month is loaded by now; failing still makes the run, and
+    # its alert, say which months could not be refreshed.
+    if failures:
+        sys.exit(f"{len(failures)} month(s) not loaded: " + "; ".join(failures))
 
 
 if __name__ == "__main__":
