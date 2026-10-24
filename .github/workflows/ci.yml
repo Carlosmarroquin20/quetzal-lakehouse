@@ -1,8 +1,9 @@
 # Checks every push and pull request without any service or credential:
-# tests, the dbt project and its unit tests, the Airflow DAG, the Terraform
-# configuration, the Compose file, known vulnerabilities in the locked
-# dependencies and in the images, and secrets in the history. Actions are pinned to a commit, not a tag, so a moved tag cannot
-# change what runs here.
+# tests, the dbt project, its unit tests and its gold contracts, the Airflow
+# DAG, the Terraform configuration, the Compose file, known vulnerabilities in
+# the locked dependencies and in the images, and secrets in the history.
+# Actions are pinned to a commit, not a tag, so a moved tag cannot change what
+# runs here.
 name: CI
 
 on:
@@ -74,6 +75,18 @@ jobs:
       # Every unit test runs on fixtures alone: those of gold models give
       # their inputs as typed SQL, so dbt does not need the silver tables.
       - run: uv run dbt test --select test_type:unit
+      # The gold contracts against those of the previous commit: the base of
+      # a pull request, or what main pointed at before this push.
+      - name: Contracts against the previous commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "No previous commit to compare with."
+            exit 0
+          fi
+          git fetch --quiet --no-tags --depth 1 origin "$BASE"
+          uv run sh check-contract-changes.sh "$BASE"
 
   dag:
     name: Airflow DAG
