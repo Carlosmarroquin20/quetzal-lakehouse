@@ -76,6 +76,13 @@
 
 ## Orchestration
 
+- When an ingestion fails, the build still runs on what bronze holds, so
+  gold that day may mix sources refreshed today with one refreshed earlier.
+  The run is marked failed and the failure alert names the task.
+- A Guatecompras month the source keeps serving broken stays at its last good
+  version until the source fixes it. The failure alert repeats every day it
+  lasts; the freshness check does not notice it, because it looks at the
+  latest load of the whole source.
 - Airflow runs only while this machine and Docker are on. A day it misses is
   not run later; the next run refreshes everything anyway.
 - The Airflow interface has no login. It is published on loopback only, for

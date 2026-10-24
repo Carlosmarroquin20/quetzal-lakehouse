@@ -98,6 +98,15 @@ of another month, or if it is empty while bronze already has that month. A
 rejected download leaves the stored partition untouched, so an outage at the
 source cannot erase data that was already loaded.
 
+**Each month of contracting processes is loaded on its own.** Guatecompras
+regenerates its files in place, and on 2026-10-23 it served several months
+whose file did not match its published checksum, a different month on each
+attempt. The job used to stop at the first such month, so one file caught
+half rewritten held back every month after it. Now a month that fails keeps
+the version bronze holds, the others are loaded, and the job fails at the
+end naming the months it could not load. An unreachable store still stops
+it at once, since that is not about one month.
+
 **A month the source has not changed is skipped.** Guatecompras rewrites its
 files as processes move forward, including those of past months, and
 publishes a checksum for each. The job stores that checksum with the Parquet
@@ -378,6 +387,16 @@ trying again does not make a source fresher. The budget's error threshold is
 current year, Guatecompras from January 2025 and whatever is in the landing
 folder. A shorter daily window with a weekly full refresh was rejected as two
 schedules to reason about.
+
+**The build goes ahead when an ingestion fails.** Bronze is consistent
+partition by partition: whatever could not be loaded keeps its previous
+version. So `dbt build` runs once the ingestion is over, whether or not it
+succeeded, and the other sources still reach gold that day. Holding the whole
+build back for one broken Guatecompras month was rejected. The failed task
+raises its own alert, the freshness check catches a source stuck for days,
+and an empty `ingestion_complete` task, which succeeds only when every
+ingestion did, keeps such a run marked failed: Airflow judges a run by its
+last tasks, and without it the run would look successful.
 
 **Retries live in Airflow.** Every job can be repeated safely, so a failed
 task is retried twice, ten minutes apart. Missed days are not caught up
