@@ -152,13 +152,12 @@ installed on the machine that builds it.
 
 ## Transformation
 
-**Silver is Parquet in its own bucket; DuckDB is only the engine.** dbt writes
-each model to the silver bucket and DuckDB keeps nothing but a view over the
-file. Storage stays separate from compute: any engine that reads Parquet can
-use silver, and the DuckDB database file is disposable. Keeping the tables
-inside a DuckDB file was rejected because the data would leave the object
-store and only DuckDB could read it. A table format such as Iceberg was left
-out for now: it would add a catalog before there is a single model to manage.
+**Silver and gold live in the object store; DuckDB is only the engine.**
+Every table is Parquet in the bucket of its layer, so storage stays separate
+from compute. Keeping the tables inside a DuckDB file was rejected because
+the data would leave the object store and only DuckDB could read it. The
+first versions wrote plain Parquet files; a table format came later (see
+[Table format](#table-format)).
 
 **Source anomalies are kept and documented, not fixed.** Silver changes types,
 names and shape, never values. Missing days are not filled in and odd values
@@ -213,7 +212,7 @@ is what dbt calls a staging model, and `fct_` and `dim_` for facts and
 dimensions.
 
 **The DuckDB database is kept in a volume, and is still disposable.** It
-holds views over the Parquet files and the seeds, nothing else. Keeping it
+holds the seeds and the attachments of the catalogs, nothing else. Keeping it
 between runs lets separate dbt commands, and the documentation site, see what
 the last build produced. Deleting it loses nothing.
 
@@ -401,8 +400,8 @@ Superset are full BI tools, but they keep their dashboards in their own
 database instead of in git, and they need more memory and services (a JVM;
 Postgres, Redis and workers) than this machine has to spare.
 
-**Read gold where it is.** DuckDB, the engine that builds the lakehouse, reads
-the Parquet files of gold straight from the bucket. Copying gold into a
+**Read gold where it is.** DuckDB, the engine that builds the lakehouse,
+reads published gold straight from the bucket, through its catalog. Copying gold into a
 database for the dashboard was rejected as a second copy to keep in step; the
 price is that a query reads the files over the network, which an hour of
 caching makes rare. Results are at most an hour older than the last build.
@@ -583,3 +582,55 @@ download cache, a second copy of every package; dropping it made the images
 200 MB to 600 MB smaller. CI fails on a high or critical vulnerability that
 has a fix, in the four project images.
 
+## Table format
+
+**A table format, because plain files could not be published safely.** With
+plain Parquet, each model replaced its file as soon as it was built and the
+tests ran afterwards, so a failed test reported a problem the dashboard was
+already showing, and a build that stopped part way left gold with tables of
+two different days. A table format gives writes transactions and keeps
+earlier versions.
+
+**DuckLake, not Iceberg.** DuckLake is the format of DuckDB, the engine the
+project already uses, and dbt-duckdb supports it directly. Iceberg is the
+better known standard, and DuckDB can write it, but dbt-duckdb has no Iceberg
+materialization, so it would have meant writing one. The price is a younger
+format, released in 2025.
+
+**A Postgres of its own for the catalogs.** The catalog has to be shared by
+dbt, the dashboard and the digest, which run in different containers, so it
+is a database server rather than a file. It is a separate service, not a
+database inside Airflow's Postgres: the lakehouse runs without Airflow, and
+the two have different lives. Each environment owns its catalogs, and each
+reader of gold has a login that can only read the prod gold catalog, as with
+the key pairs of the object store. A `catalog-init` service applies the logins
+and grants on every start, like `storage-init`, so adding a role does not mean
+recreating the catalog.
+
+**Write, audit, publish.** Gold is built and tested in `gold.staging`, and
+`publish_gold` replaces all of `gold.main` in one transaction, only after a
+build in which every model and test passed. Building straight into gold and
+rolling back on a failure was rejected: until the rollback, readers could see
+the data that failed. Silver is written in place, because only dbt reads it.
+
+**The publish protects itself.** The Airflow DAG publishes only after a
+build that passed, but someone could run the operation by hand. So the build
+empties staging when it starts and leaves a mark there only if everything
+passed, and the operation refuses without the mark or with a model missing.
+Emptying staging goes through dbt's adapter, so dbt's cache of existing
+tables forgets them too; dropping them directly made the next build fail
+when it tried to back up tables that no longer existed.
+
+**Publish by copying.** Each published table is a copy of its staging table.
+Moving tables between schemas without copying is not something DuckLake
+promises, and gold is small: the copy takes seconds.
+
+**Thirty days of history.** Every build writes new files and keeps the old
+ones for reading earlier versions. A daily `maintain_lake` task forgets the
+versions older than 30 days and deletes the files only they used, so the
+buckets do not grow without end.
+
+**Offline catalogs for CI.** The profile attaches the Postgres catalogs only
+when `LAKE_CATALOG_HOST` is set. Without it, as in CI and when the
+documentation is generated, it attaches local throwaway catalogs under
+`target/`, so dbt can still parse and run unit tests with no service.

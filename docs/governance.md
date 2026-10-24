@@ -85,6 +85,13 @@ in the first place. The administrator key is not used by any job. On AWS the
 same five roles are IAM roles with the same access and no long-lived keys;
 see [AWS](aws.md).
 
+**One catalog login per role, too.** The DuckLake catalogs follow the same
+lines: dbt in prod owns the prod catalogs, dbt in dev the dev ones, and
+neither can connect to the other's. The dashboard and the digest each have a
+login that can only read the prod gold catalog: they can neither change it
+nor connect to silver. Postgres enforces it, and the readers also attach the
+catalog read-only.
+
 **The digest has its own role.** It reads exactly what the dashboard reads,
 and could have reused its key pair. A separate one means that each consumer
 of gold can be told apart in the store and revoked without stopping the

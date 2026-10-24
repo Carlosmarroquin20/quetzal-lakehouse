@@ -35,9 +35,13 @@ under [Status](#status).
   under fixed names, so a rerun never duplicates data, and months the source
   has not changed are skipped by their checksum.
 - **Storage apart from compute:** every layer is Parquet in its own bucket of
-  an S3-compatible store; DuckDB is only the engine, so moving to AWS S3
+  an S3-compatible store, silver and gold as DuckLake tables; DuckDB is only the engine, so moving to AWS S3
   changes configuration, not code. That was checked by running the jobs
   against an AWS emulator with the temporary credentials of their IAM roles.
+- **Write, audit, publish:** gold is built and tested in a staging schema
+  and published in one transaction, only when every test passed, so the
+  dashboard never shows data that failed. Thirty days of earlier versions
+  stay readable.
 - **A dimensional model:** three fact tables (513,471 awards, 329,256 budget
   lines, a daily exchange rate) sharing date, currency and entity dimensions,
   so budget and procurement can be compared entity by entity.
@@ -84,12 +88,13 @@ flowchart LR
         transform["transform job<br/>(dbt + DuckDB)"]
         docs["docs<br/>dbt documentation site<br/>127.0.0.1:8080"]
         dashboard["dashboard<br/>(Streamlit + DuckDB)<br/>127.0.0.1:8501"]
+        catalog[("catalog<br/>DuckLake catalogs (Postgres)")]
         notifications["notifications job<br/>(daily digest)"]
         n8n["n8n<br/>127.0.0.1:5678"]
         subgraph storage["storage: SeaweedFS S3 gateway, 127.0.0.1:8333"]
             bronze[("quetzal-bronze<br/>original files + Parquet<br/>partitioned by period")]
-            silver[("quetzal-silver<br/>typed Parquet")]
-            gold[("quetzal-gold<br/>dimensional model in Parquet")]
+            silver[("quetzal-silver<br/>DuckLake tables")]
+            gold[("quetzal-gold<br/>dimensional model, DuckLake")]
         end
     end
     banguat -- "one request per year" --> ingestion
@@ -102,6 +107,8 @@ flowchart LR
     transform -- "write, then test" --> gold
     transform -. "models, tests and lineage" .-> docs
     gold -- "read only" --> dashboard
+    transform -- "versions, publish" --> catalog
+    catalog -. "published gold" .-> dashboard
     gold -- "read only" --> notifications
     airflow -. "starts" .-> ingestion
     airflow -. "starts, after ingestion" .-> transform
@@ -118,6 +125,7 @@ flowchart LR
 | Object storage | SeaweedFS behind the S3 API |
 | Ingestion | Python 3.13, httpx, pyarrow, uv |
 | Transformation | dbt Core 1.12 with dbt-duckdb, DuckDB 1.5 |
+| Table format | DuckLake, with its catalog in Postgres 17 |
 | Orchestration | Airflow 3.3 with the local executor and Postgres |
 | Dashboard | Streamlit with DuckDB |
 | Notifications | n8n 2.43 Community Edition, Telegram, SMTP |
@@ -151,6 +159,7 @@ docker compose run --rm ingestion exchange-rates --from-year 1989
 docker compose run --rm ingestion contracting-processes --from-month 2025-01
 docker compose run --rm ingestion budget-execution    # workbooks in landing/minfin/
 docker compose run --rm transform       # dbt build: silver, gold and tests
+docker compose run --rm transform run-operation publish_gold
 docker compose up -d dashboard          # http://localhost:8501
 ```
 
@@ -177,12 +186,12 @@ documentation site, Airflow and development.
 Built, in this order: the choice of sources, the storage, the bronze, silver
 and gold layers for the exchange rate, procurement and the budget, the daily
 orchestration, governance, the dashboard, the Terraform configuration of the
-AWS storage and roles, and the notifications.
+AWS storage and roles, the notifications, and the DuckLake table format with
+write-audit-publish.
 
 Not built: an actual AWS deployment (container images, scheduled tasks, the
 dashboard behind a login), which would cost money to run; see
-[AWS](docs/aws.md#what-a-deployment-would-add). Nor a table format for
-silver and gold.
+[AWS](docs/aws.md#what-a-deployment-would-add).
 
 ## Data sources
 

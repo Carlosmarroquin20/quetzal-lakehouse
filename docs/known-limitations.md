@@ -42,10 +42,17 @@
   and processes that were never awarded do not reach gold.
 - 487 suppliers have no legal type, so whether they are natural persons is
   unknown.
-- Silver and gold are plain Parquet without a table format: no transactions,
-  no schema evolution and no history of previous versions. Each file is
-  replaced on every run and the data tests run afterwards; a failed data test
-  therefore reports a problem in a file that is already written.
+- Silver is written in place, so a failed test there reports a problem in a
+  table that is already written; only gold is published after the tests.
+- Publishing copies every gold table, so gold is written twice per run.
+- The catalog is a single Postgres without replication or backups. Losing it
+  loses which files make up each table: the Parquet files remain, but
+  rebuilding from bronze is the way back.
+- The plain Parquet files the first versions wrote are still in the silver
+  and gold buckets, outside `ducklake/`. Nothing reads them any more; they can
+  be deleted by hand.
+- The dashboard and the digest need the catalog running to read gold.
+- DuckLake is young; its catalog format may change between DuckDB releases.
 - `dim_date` does not mark public holidays.
 - `dim_currency` is maintained by hand from a seed file.
 - The hash keys make the fact tables unreadable without joining the

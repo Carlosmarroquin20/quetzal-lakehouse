@@ -48,9 +48,17 @@ Requirements: Docker with Compose v2, and about 2 GB of disk for the data.
    docker compose run --rm transform
    ```
 
-   This runs `dbt build`. It should end with `PASS=223 ... ERROR=0`. To try
-   a change without touching prod, run the same build in dev, which writes
-   its own silver and gold buckets:
+   This runs `dbt build`: silver, and gold in `gold.staging`, with every
+   test. It should end with `PASS=225 ... ERROR=0`. Then publish gold, which
+   is what the dashboard and the digest read:
+
+   ```bash
+   docker compose run --rm transform run-operation publish_gold
+   ```
+
+   Publishing refuses unless the last build passed; Airflow does both steps
+   on its own. To try a change without touching prod, run the same build in
+   dev, which writes its own silver and gold buckets and catalogs:
 
    ```bash
    docker compose run --rm transform-dev

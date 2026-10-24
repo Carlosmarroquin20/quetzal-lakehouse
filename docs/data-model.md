@@ -70,8 +70,9 @@ SHA-256 of the workbook as metadata.
 
 ## Silver layout
 
-Silver holds typed tables with English column names, one Parquet file each in
-the silver bucket. Column by column descriptions are in the
+Silver holds typed tables with English column names: DuckLake tables of the
+`silver` catalog (see [Table format](#table-format)), whose Parquet files are
+in the silver bucket. Column by column descriptions are in the
 [dbt documentation](https://carlosmarroquin20.github.io/quetzal-lakehouse/).
 
 | Model | One row per | Rows | Main columns |
@@ -90,8 +91,9 @@ published from January 2025 and the budgets of 2025 and 2026.
 Gold is a dimensional model: three fact tables that share dimensions. The
 date and currency dimensions are shared by exchange rates and awards; the
 entity dimension links awards (through the buyer) with the budget. Each table
-is one Parquet file in the gold bucket, under a folder with the table's name.
-Columns and their descriptions are in the [dbt documentation](https://carlosmarroquin20.github.io/quetzal-lakehouse/).
+is a DuckLake table of the `gold` catalog: readers see `gold.main`, which is
+replaced only by a build that passed every test (see
+[Table format](#table-format)). Columns and their descriptions are in the [dbt documentation](https://carlosmarroquin20.github.io/quetzal-lakehouse/).
 
 ```mermaid
 erDiagram
@@ -261,9 +263,43 @@ three pages over prod gold:
 | Budget execution | For a fiscal year: current budget, accrued and paid per entity, the share of its budget each one accrued, and its valid awards next to it. | `fct_budget_execution`, `dim_entity`, `fct_awards`, `dim_buyer`, `dim_date` |
 | Exchange rate | The daily reference rate over a chosen range, with the days the bank did not publish marked, and the average, lowest and highest rate per year. | `fct_exchange_rates`, `dim_date`, `dim_currency` |
 
-It opens an in-memory DuckDB database with a view per gold table over its
-Parquet file, so each query reads the bucket directly; results are cached for
-an hour. Its queries are in `dashboard/src/quetzal_dashboard/queries.py` and
+It opens an in-memory DuckDB database, attaches the gold catalog read-only
+and creates a view per table of `gold.main`, so each query reads the current
+Parquet files of published gold; results are cached for an hour. Its queries are in `dashboard/src/quetzal_dashboard/queries.py` and
 are tested against small invented tables. The dashboard is declared in dbt as
 the exposure `quetzal_dashboard`, so the lineage graph runs from the sources
 to it.
+
+## Table format
+
+Silver and gold are [DuckLake](https://ducklake.select) catalogs. The data is
+Parquet in the layer's bucket, under `ducklake/`; a Postgres database (the
+`catalog` service) records which files make up each version of each table.
+That gives every write a transaction, and keeps earlier versions readable.
+
+| Catalog | Environment | Schemas | Who can read it |
+|---|---|---|---|
+| `lake_silver` | prod | `main` | dbt in prod |
+| `lake_gold` | prod | `staging`, `main` | dbt in prod; the dashboard and the digest read `main` |
+| `lake_silver_dev`, `lake_gold_dev` | dev | as prod | dbt in dev |
+
+A build writes silver in place and gold into `gold.staging`, and runs every
+test there. Only then does `publish_gold` replace every table of `gold.main`
+in one transaction, so readers see either the previous version of all of gold
+or the new one, and never data that failed a test:
+
+1. When a build starts, `gold.staging` is emptied.
+2. dbt builds the models and runs the tests.
+3. If every model and test passed, the build leaves a mark,
+   `gold.staging._build_passed`.
+4. `dbt run-operation publish_gold` refuses to run without that mark or if
+   any gold model is missing from staging; otherwise it copies all of them to
+   `gold.main` at once.
+
+Earlier versions stay readable for 30 days, after which the daily
+`maintain_lake` operation forgets them and deletes the files only they used.
+A table as it was on an earlier day:
+
+```sql
+select count(*) from gold.main.fct_awards at (timestamp => now() - interval '7 days')
+```

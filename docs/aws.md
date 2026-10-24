@@ -120,8 +120,10 @@ them in a meaningful way:
   fixed monthly cost; the scheduler is much cheaper for six tasks a day.
 - **The dashboard as an ECS service** behind a load balancer with
   authentication, since Streamlit has no login.
-- **Secrets in AWS Secrets Manager**: the pseudonymization keys, read by the
-  dbt tasks.
+- **The DuckLake catalog in Amazon RDS for PostgreSQL**, the smallest
+  instance, with the same logins per role.
+- **Secrets in AWS Secrets Manager**: the pseudonymization keys and the
+  catalog passwords, read by the tasks.
 - **Terraform state in an S3 bucket** with locking, instead of a local file.
 - **The MINFIN workbooks** uploaded by hand to a landing prefix instead of a
   local folder.
