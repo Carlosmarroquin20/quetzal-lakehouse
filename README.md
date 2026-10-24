@@ -43,13 +43,17 @@ under [Status](#status).
   dashboard never shows data that failed. Thirty days of earlier versions
   stay readable, and the catalogs are dumped every day, with a restore that
   was tried.
+- **A contract on gold:** every gold column has a declared type, and a model
+  that returns anything else fails before writing. CI fails when a change
+  removes or retypes a column of the previous commit, and the dashboard and
+  the digest are tested on tables with the contract's types.
 - **A dimensional model:** three fact tables (513,471 awards, 329,256 budget
   lines, a daily exchange rate) sharing date, currency and entity dimensions,
   so budget and procurement can be compared entity by entity.
 - **Tests that encode what profiling found:** 195 dbt data tests and 8 unit
-  tests fail on new anomalies, not on the known ones; 71 ingestion tests, 16
-  dashboard tests, 22 digest tests and 14 tests of the Airflow DAG and its
-  failure callback cover the Python code.
+  tests fail on new anomalies, not on the known ones; 76 ingestion tests, 21
+  dashboard tests, 27 digest tests, 9 backup tests and 23 tests of the Airflow
+  DAG and its failure callback cover the Python code.
 - **Continuous integration:** every push runs those tests and the dbt unit
   tests, loads the DAG in the Airflow image, checks the Terraform
   configuration and the Compose file, scans the locked dependencies and the

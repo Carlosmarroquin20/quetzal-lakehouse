@@ -53,6 +53,11 @@
   be deleted by hand.
 - The dashboard and the digest need the catalog running to read gold.
 - DuckLake is young; its catalog format may change between DuckDB releases.
+- Of the constraints, the tables enforce only not null; DuckLake refuses
+  primary keys, unique, check and foreign keys. Uniqueness and relationships
+  are data tests, which run after the table is written.
+- The contracts cover names, types and not null. A change of meaning that
+  keeps them, such as an amount in another currency, passes.
 - `dim_date` does not mark public holidays.
 - `dim_currency` is maintained by hand from a seed file.
 - The hash keys make the fact tables unreadable without joining the
@@ -172,6 +177,10 @@
   Dependabot.
 - The image scan ignores vulnerabilities without a fix, which cannot be acted
   on but still exist.
+- Changes are pushed straight to main, so the contract check fails CI
+  after a breaking change is already there, not before; once the transform
+  image is rebuilt, the daily run would publish it. A pull request would be
+  stopped before the merge.
 - gitleaks and Trivy, run by the CI workflow, are pinned by version tag
   only, and nothing updates them; a new release has to be adopted by hand.
 - A pinned digest also freezes the operating system patches of the base

@@ -216,6 +216,14 @@ cd ../orchestration
 uv run pytest
 ```
 
+To check the gold contracts against an earlier commit, as CI does, with
+the variables of the dbt job of `.github/workflows/ci.yml` set:
+
+```bash
+cd transform
+uv run sh check-contract-changes.sh HEAD
+```
+
 The tests of the DAG itself need Airflow, so the uv environment skips them.
 They run inside the Airflow image the stack uses:
 

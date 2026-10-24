@@ -78,3 +78,33 @@ its day, the choice of an entity's name, and the masking of natural persons.
 
 dbt runs a model's unit tests before building it, so a logic error that a
 unit test catches stops the build before the table is overwritten.
+
+## Contracts
+
+Every gold model enforces a contract: its YAML declares each column and its
+type, and dbt checks, before writing, that the model returns exactly those
+columns with those types. The 59 columns that have a not-null test also carry
+a not-null constraint, which the table enforces as it is written. A model
+that returns another type, leaves a column out or writes a null where none is
+allowed fails; the build leaves no mark, so `gold.main` keeps its last
+version. All three cases were tried.
+
+DuckLake refuses every other constraint (primary keys, unique, check and
+foreign keys), so uniqueness and relationships stay data tests. `publish_gold`
+creates each table of `gold.main` from the contract, so the published tables
+keep the not-null constraints, which a copy made with `create table as
+select` drops.
+
+CI compares the contracts with those of the previous commit, with
+`transform/check-contract-changes.sh`. It fails when a change removes or
+renames a column, changes its type, drops a not-null constraint or stops
+enforcing the contract; adding a column passes. A change meant to break a
+contract goes into a new version of the model, and the old version stays
+until the dashboard and the digest have moved. No model has a second version
+yet.
+
+The tests of the dashboard and the digest rebuild their invented gold tables
+with the contract's types, and refuse a column the contract does not have,
+so a query that reads a column gold does not publish fails in its own tests.
+Turning that on found one such column in the digest's tests, in a table they
+only count.

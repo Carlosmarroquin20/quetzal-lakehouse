@@ -684,3 +684,29 @@ and attached as a DuckLake catalog: all 13 tables matched the live ones in
 rows and in a hash of every value. The documented procedure was tried too,
 with the restored tables owned by `lake_prod`, which could then create and
 drop tables in it.
+
+## Contracts
+
+**The contract lives in dbt.** The columns and types of each gold model are
+declared in the YAML that already documents and tests it, and dbt enforces
+them on every build. Separate contract files, in the Open Data Contract
+Standard with its own tool, were rejected: they would repeat what the YAML
+says, and nothing would hold the build to them.
+
+**Not null as a constraint as well as a test.** A test finds a null after the
+table is written; a constraint refuses to write it. The tests stay, because
+the documentation and the build results report them. Other constraints are
+not possible: DuckLake refuses them.
+
+**A breaking change fails CI.** For a model without versions dbt only warns
+about a breaking change; the check turns the warning into an error. It
+compares with the previous commit, the base of a pull request or what main
+pointed at before the push, because that is what the consumers were built
+against. A deliberate break is a new version of the model, kept next to the
+old one until the consumers move, rather than a way to switch the check off.
+
+**The consumers' tests take the contract's types.** Checking only that the
+columns they invent exist in the contract was rejected: the types matter as
+much, since a decimal amount and a floating point one do not add up the
+same. Rebuilding their tables from the contract checks both, and their
+queries run on the types gold publishes.
