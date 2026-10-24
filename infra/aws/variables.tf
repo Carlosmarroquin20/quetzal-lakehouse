@@ -20,6 +20,17 @@ variable "noncurrent_version_days" {
   default     = 90
 }
 
+variable "backup_keep_days" {
+  description = "Days the catalog dumps are kept. Below the days of table versions the catalogs keep (30), or old dumps point at deleted files."
+  type        = number
+  default     = 14
+
+  validation {
+    condition     = var.backup_keep_days >= 1 && var.backup_keep_days < 30
+    error_message = "Keep between 1 and 29 days of dumps."
+  }
+}
+
 variable "require_tls" {
   description = "Refuse requests to the buckets made without TLS. Only the emulator, which serves plain HTTP, turns it off."
   type        = bool

@@ -7,6 +7,7 @@ locals {
     gold       = "${var.name_prefix}-gold"
     silver-dev = "${var.name_prefix}-silver-dev"
     gold-dev   = "${var.name_prefix}-gold-dev"
+    backups    = "${var.name_prefix}-backups"
   }
 }
 
@@ -104,6 +105,22 @@ resource "aws_s3_bucket_lifecycle_configuration" "layer" {
     filter {}
     abort_incomplete_multipart_upload {
       days_after_initiation = 7
+    }
+  }
+
+  # The catalog dumps expire after the days the backup job keeps them, as a
+  # second line in case the job stops pruning.
+  dynamic "rule" {
+    for_each = each.key == "backups" ? [1] : []
+    content {
+      id     = "expire-catalog-dumps"
+      status = "Enabled"
+      filter {
+        prefix = "catalog/"
+      }
+      expiration {
+        days = var.backup_keep_days
+      }
     }
   }
 

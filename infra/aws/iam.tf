@@ -29,6 +29,11 @@ locals {
       read        = ["gold"]
       read_write  = []
     }
+    backup = {
+      description = "Catalog backups: write and prune the dumps."
+      read        = []
+      read_write  = ["backups"]
+    }
   }
 }
 
