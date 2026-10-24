@@ -31,9 +31,10 @@ USER notifications
 ENV PATH="/app/.venv/bin:$PATH"
 
 # The DuckDB extensions are downloaded here, at build time, so that a run
-# does not depend on that download: httpfs reads S3, and aws finds
-# credentials the standard AWS way when no key pair is given.
-RUN python -c "import duckdb; c = duckdb.connect(); c.install_extension('httpfs'); c.install_extension('aws')"
+# does not depend on that download: httpfs reads S3, aws finds
+# credentials the standard AWS way when no key pair is given, and
+# ducklake and postgres read the DuckLake catalog of gold.
+RUN python -c "import duckdb; c = duckdb.connect(); [c.install_extension(e) for e in ('httpfs', 'aws', 'ducklake', 'postgres')]"
 
 # Python runs as process 1 here, and Linux delivers no SIGTERM to process 1
 # unless it handles it, so `docker stop` would wait ten seconds and kill it.

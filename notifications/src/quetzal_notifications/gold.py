@@ -1,8 +1,8 @@
 """Read-only access to the gold layer.
 
-The same approach as the dashboard: an in-memory DuckDB database with a view
-per gold table over the Parquet file dbt wrote, so queries name the tables
-the way the dbt models do. The code is repeated rather than shared because
+The same approach as the dashboard: an in-memory DuckDB database that
+attaches the DuckLake catalog of prod gold read-only, with a view per
+published table, so queries name the tables the way the dbt models do. The code is repeated rather than shared because
 the two run as separate images with separate key pairs, and neither should
 depend on the other's package.
 """
@@ -65,16 +65,36 @@ def create_s3_secret(con: duckdb.DuckDBPyConnection) -> None:
     con.execute(f"create secret s3 (type s3, provider {provider}{fields})", options)
 
 
-def connect() -> duckdb.DuckDBPyConnection:
-    """Open a connection whose views read gold from the object store."""
-    bucket = _required("S3_BUCKET_GOLD")
+def create_catalog_secret(con: duckdb.DuckDBPyConnection) -> None:
+    """Tell DuckDB how to log in to the DuckLake catalog, from the environment.
 
+    The login can only read the prod gold catalog. The password is passed as
+    a parameter, so it is never part of a SQL string that could be logged.
+    """
+    options: dict[str, object] = {
+        "host": _required("LAKE_CATALOG_HOST"),
+        "port": int(os.environ.get("LAKE_CATALOG_PORT", "5432")),
+        "user": _required("LAKE_CATALOG_USER"),
+        "password": _required("LAKE_CATALOG_PASSWORD"),
+    }
+    fields = ", ".join(f"{name} ${name}" for name in options)
+    # Unnamed, so DuckLake uses it to reach the catalog without being told.
+    con.execute(f"create secret (type postgres, {fields})", options)
+
+
+def connect() -> duckdb.DuckDBPyConnection:
+    """Open a connection whose views read the published gold tables."""
     con = duckdb.connect()
-    con.load_extension("httpfs")
+    for extension in ("httpfs", "ducklake", "postgres"):
+        con.load_extension(extension)
     create_s3_secret(con)
+    create_catalog_secret(con)
+    # Read-only: the catalog login could not write anyway, and DuckDB then
+    # never tries to.
+    con.execute(
+        f"attach 'ducklake:postgres:dbname={_required('LAKE_GOLD_CATALOG')}'"
+        " as gold (read_only)"
+    )
     for table in TABLES:
-        con.execute(
-            f"create view {table} as "
-            f"select * from read_parquet('s3://{bucket}/{table}/{table}.parquet')"
-        )
+        con.execute(f"create view {table} as select * from gold.main.{table}")
     return con

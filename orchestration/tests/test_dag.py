@@ -29,6 +29,7 @@ SECRETS = {
     "S3_NOTIFICATIONS_SECRET_ACCESS_KEY": "test-notifications-secret",
     "NOTIFICATIONS_WEBHOOK_SECRET": "test-webhook-secret",
     "LAKE_CATALOG_PROD_PASSWORD": "test-catalog-password",
+    "LAKE_CATALOG_NOTIFICATIONS_PASSWORD": "test-digest-catalog-password",
 }
 
 
@@ -174,4 +175,13 @@ def test_publish_and_maintenance_run_dbt_operations(dag):
     assert dag.get_task("maintain_lake").command == [
         "run-operation", "maintain_lake", "--args", "{keep_days: 30}",
     ]
+
+
+def test_the_digest_reads_gold_with_its_own_catalog_login(dag):
+    digest = dag.get_task("send_daily_digest")
+    assert digest.environment["LAKE_CATALOG_USER"] == "lake_notifications"
+    assert digest.environment["LAKE_GOLD_CATALOG"] == "lake_gold"
+    assert digest._private_environment["LAKE_CATALOG_PASSWORD"] == (
+        SECRETS["LAKE_CATALOG_NOTIFICATIONS_PASSWORD"]
+    )
 

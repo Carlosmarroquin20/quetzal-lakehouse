@@ -35,6 +35,7 @@ x-airflow: &airflow
     S3_TRANSFORM_PROD_SECRET_ACCESS_KEY: ${S3_TRANSFORM_PROD_SECRET_ACCESS_KEY:?set S3_TRANSFORM_PROD_SECRET_ACCESS_KEY in .env}
     PSEUDONYMIZATION_KEY_PROD: ${PSEUDONYMIZATION_KEY_PROD:?set PSEUDONYMIZATION_KEY_PROD in .env}
     LAKE_CATALOG_PROD_PASSWORD: ${LAKE_CATALOG_PROD_PASSWORD:?set LAKE_CATALOG_PROD_PASSWORD in .env}
+    LAKE_CATALOG_NOTIFICATIONS_PASSWORD: ${LAKE_CATALOG_NOTIFICATIONS_PASSWORD:?set LAKE_CATALOG_NOTIFICATIONS_PASSWORD in .env}
     S3_NOTIFICATIONS_ACCESS_KEY_ID: ${S3_NOTIFICATIONS_ACCESS_KEY_ID:?set S3_NOTIFICATIONS_ACCESS_KEY_ID in .env}
     S3_NOTIFICATIONS_SECRET_ACCESS_KEY: ${S3_NOTIFICATIONS_SECRET_ACCESS_KEY:?set S3_NOTIFICATIONS_SECRET_ACCESS_KEY in .env}
     # Optional: without a URL the digest task is skipped.
@@ -268,10 +269,14 @@ services:
     environment:
       S3_ENDPOINT_URL: http://storage:8333
       S3_REGION: ${S3_REGION:?set S3_REGION in .env}
-      S3_BUCKET_GOLD: ${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env}
-      # The dashboard role: it can read prod gold and nothing else.
+      # The dashboard role: it can read prod gold and nothing else, in the
+      # bucket and in the catalog.
       S3_ACCESS_KEY_ID: ${S3_DASHBOARD_ACCESS_KEY_ID:?set S3_DASHBOARD_ACCESS_KEY_ID in .env}
       S3_SECRET_ACCESS_KEY: ${S3_DASHBOARD_SECRET_ACCESS_KEY:?set S3_DASHBOARD_SECRET_ACCESS_KEY in .env}
+      LAKE_CATALOG_HOST: catalog
+      LAKE_CATALOG_USER: lake_dashboard
+      LAKE_CATALOG_PASSWORD: ${LAKE_CATALOG_DASHBOARD_PASSWORD:?set LAKE_CATALOG_DASHBOARD_PASSWORD in .env}
+      LAKE_GOLD_CATALOG: lake_gold
     ports:
       - "127.0.0.1:8501:8501"
     depends_on: *after-storage-init
@@ -287,10 +292,14 @@ services:
     environment:
       S3_ENDPOINT_URL: http://storage:8333
       S3_REGION: ${S3_REGION:?set S3_REGION in .env}
-      S3_BUCKET_GOLD: ${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env}
-      # The notifications role: it can read prod gold and nothing else.
+      # The notifications role: it can read prod gold and nothing else, in
+      # the bucket and in the catalog.
       S3_ACCESS_KEY_ID: ${S3_NOTIFICATIONS_ACCESS_KEY_ID:?set S3_NOTIFICATIONS_ACCESS_KEY_ID in .env}
       S3_SECRET_ACCESS_KEY: ${S3_NOTIFICATIONS_SECRET_ACCESS_KEY:?set S3_NOTIFICATIONS_SECRET_ACCESS_KEY in .env}
+      LAKE_CATALOG_HOST: catalog
+      LAKE_CATALOG_USER: lake_notifications
+      LAKE_CATALOG_PASSWORD: ${LAKE_CATALOG_NOTIFICATIONS_PASSWORD:?set LAKE_CATALOG_NOTIFICATIONS_PASSWORD in .env}
+      LAKE_GOLD_CATALOG: lake_gold
       # Optional: without a URL, `--post` ends without sending anything.
       NOTIFICATIONS_WEBHOOK_URL: ${NOTIFICATIONS_WEBHOOK_URL:-}
       NOTIFICATIONS_WEBHOOK_SECRET: ${NOTIFICATIONS_WEBHOOK_SECRET:-}

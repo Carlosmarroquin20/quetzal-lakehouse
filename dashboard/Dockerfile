@@ -31,9 +31,10 @@ RUN useradd --create-home dashboard
 USER dashboard
 
 # The DuckDB extensions are downloaded here, at build time, so that starting
-# the dashboard does not depend on that download: httpfs reads S3, and aws
-# finds credentials the standard AWS way when no key pair is given.
-RUN python -c "import duckdb; c = duckdb.connect(); c.install_extension('httpfs'); c.install_extension('aws')"
+# the dashboard does not depend on that download: httpfs reads S3, aws
+# finds credentials the standard AWS way when no key pair is given, and
+# ducklake and postgres read the DuckLake catalog of gold.
+RUN python -c "import duckdb; c = duckdb.connect(); [c.install_extension(e) for e in ('httpfs', 'aws', 'ducklake', 'postgres')]"
 
 COPY --chown=dashboard app.py ./
 COPY --chown=dashboard views ./views

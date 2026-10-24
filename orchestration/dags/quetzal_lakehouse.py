@@ -65,9 +65,14 @@ NOTIFICATIONS_SECRETS = {
     "S3_ACCESS_KEY_ID": os.environ.get("S3_NOTIFICATIONS_ACCESS_KEY_ID", ""),
     "S3_SECRET_ACCESS_KEY": os.environ.get("S3_NOTIFICATIONS_SECRET_ACCESS_KEY", ""),
     "NOTIFICATIONS_WEBHOOK_SECRET": os.environ.get("NOTIFICATIONS_WEBHOOK_SECRET", ""),
+    "LAKE_CATALOG_PASSWORD": os.environ.get("LAKE_CATALOG_NOTIFICATIONS_PASSWORD", ""),
 }
 NOTIFICATIONS = {
     "NOTIFICATIONS_WEBHOOK_URL": os.environ.get("NOTIFICATIONS_WEBHOOK_URL", ""),
+    # The published gold, read with a login that can do nothing else.
+    "LAKE_CATALOG_HOST": "catalog",
+    "LAKE_CATALOG_USER": "lake_notifications",
+    "LAKE_GOLD_CATALOG": "lake_gold",
 }
 # What the digest job exits with when no webhook URL is set: the task is then
 # skipped instead of failed, so the pipeline runs the same without n8n.
