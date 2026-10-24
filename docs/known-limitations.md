@@ -45,9 +45,9 @@
 - Silver is written in place, so a failed test there reports a problem in a
   table that is already written; only gold is published after the tests.
 - Publishing copies every gold table, so gold is written twice per run.
-- The catalog is a single Postgres without replication or backups. Losing it
-  loses which files make up each table: the Parquet files remain, but
-  rebuilding from bronze is the way back.
+- The catalog is a single Postgres without replication. Losing it loses
+  which files make up each table until a dump is restored, and changes since
+  the last dump are lost (see Backups).
 - The plain Parquet files the first versions wrote are still in the silver
   and gold buckets, outside `ducklake/`. Nothing reads them any more; they can
   be deleted by hand.
@@ -177,3 +177,13 @@
 - A pinned digest also freezes the operating system patches of the base
   image until Dependabot proposes the next one: it checks weekly and waits
   seven days after a release, so up to about two weeks.
+
+## Backups
+
+- Only the catalogs are backed up. The data files are protected by the
+  versioning of bronze and by the 30 days of versions in silver and gold, not
+  by a copy elsewhere.
+- Locally, the backups live in the same object store, on the same disk, as
+  the data. Losing the machine loses both; in AWS the bucket could be in
+  another region or account.
+- Restoring is a manual procedure, tried once on 2026-10-23.

@@ -328,7 +328,7 @@ model.
 project closely: every bronze partition and dbt model would be an asset with
 lineage drawn for free. Airflow was chosen because it is the orchestrator
 most teams run and most job descriptions ask for. The price is a task-based
-view: Airflow knows the six tasks, not the tables they produce.
+view: Airflow knows the tasks, not the tables they produce.
 
 **Airflow schedules; the images do the work.** Each task starts the
 ingestion or transform image as a container, exactly like `docker compose
@@ -653,3 +653,34 @@ buckets do not grow without end.
 when `LAKE_CATALOG_HOST` is set. Without it, as in CI and when the
 documentation is generated, it attaches local throwaway catalogs under
 `target/`, so dbt can still parse and run unit tests with no service.
+
+## Backups
+
+**The catalogs are what to back up.** Since silver and gold became DuckLake
+tables, the catalog is the only record of which Parquet files make up each
+version of each table. Without it the files remain, but rebuilding from bronze
+is the way back. Bronze itself is the original files of the sources, kept in
+its own bucket with versions.
+
+**A dump a day, after the publish.** A task dumps the prod catalogs with
+`pg_dump` once gold has been published and the expired versions removed, so
+each dump holds the day's version. The dev catalogs are not backed up; a build
+recreates them.
+
+**Fourteen days, below the thirty of versions.** A dump points at files, and
+`maintain_lake` deletes the files of versions older than 30 days. A dump older
+than that would point at files that are gone, so dumps are kept for 14 days.
+A DAG test fails if the two numbers ever cross. In AWS a lifecycle rule on the
+bucket expires them too, in case the job stops pruning.
+
+**A bucket and a role of their own.** The backup job can write only its
+bucket, and its catalog login can only read the prod catalogs. A mistake in the
+job cannot touch the data, and the ingestion role, which writes bronze, cannot
+touch the backups. Keeping the dumps in the bronze bucket was rejected for
+both reasons.
+
+**A restore, tried.** The dump of gold was restored into a scratch database
+and attached as a DuckLake catalog: all 13 tables matched the live ones in
+rows and in a hash of every value. The documented procedure was tried too,
+with the restored tables owned by `lake_prod`, which could then create and
+drop tables in it.

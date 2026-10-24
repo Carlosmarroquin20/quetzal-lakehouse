@@ -41,7 +41,8 @@ under [Status](#status).
 - **Write, audit, publish:** gold is built and tested in a staging schema
   and published in one transaction, only when every test passed, so the
   dashboard never shows data that failed. Thirty days of earlier versions
-  stay readable.
+  stay readable, and the catalogs are dumped every day, with a restore that
+  was tried.
 - **A dimensional model:** three fact tables (513,471 awards, 329,256 budget
   lines, a daily exchange rate) sharing date, currency and entity dimensions,
   so budget and procurement can be compared entity by entity.
@@ -141,6 +142,7 @@ flowchart LR
 | `orchestration/` | The Airflow DAG and its failure callback, with the callback's tests. |
 | `dashboard/` | The Streamlit dashboard, its queries and their tests. |
 | `notifications/` | The job that computes the daily digest from gold and posts it, with its tests. |
+| `backup/` | The job that dumps the DuckLake catalogs every day, with its tests. |
 | `automation/n8n/` | The n8n workflows, the script that imports them, sample payloads and the script that normalizes an export. |
 | `infra/aws/` | The Terraform configuration of the AWS storage and roles. |
 | `docs/` | The documentation listed below. |

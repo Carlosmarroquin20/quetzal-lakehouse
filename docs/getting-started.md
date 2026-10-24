@@ -171,6 +171,33 @@ docker ps --all --filter label=quetzal-lakehouse.task
 docker container prune --filter label=quetzal-lakehouse.task
 ```
 
+## Backing up and restoring the catalog
+
+Airflow dumps the prod catalogs every day, after the publish and the
+maintenance, to `s3://quetzal-backups/catalog/<catalog>/<day>.dump`, and keeps
+14 days of dumps. To take one by hand:
+
+```bash
+docker compose run --rm backup
+```
+
+To restore a catalog, for example `lake_gold` from a given day: stop
+Airflow, download the dump with the backup key pair from `.env`, and load it
+into a fresh database owned by `lake_prod`, so dbt can keep writing to it.
+
+```bash
+docker compose --profile airflow stop
+aws --endpoint-url http://localhost:8333 s3 cp s3://quetzal-backups/catalog/lake_gold/2026-10-23.dump lake_gold.dump
+docker compose cp lake_gold.dump catalog:/tmp/lake_gold.dump
+docker compose exec catalog sh -c 'dropdb -U "$POSTGRES_USER" --if-exists lake_gold && createdb -U "$POSTGRES_USER" -O lake_prod lake_gold && pg_restore -U "$POSTGRES_USER" --no-owner --role=lake_prod -d lake_gold /tmp/lake_gold.dump'
+docker compose run --rm catalog-init
+```
+
+The last command grants the readers their access again. A dump only says
+which files make up each table, so it restores the version of that day as
+long as its files are still in the bucket: they are kept for 30 days, more
+than the 14 days of dumps.
+
 ## Development
 
 The Python projects use [uv](https://docs.astral.sh/uv/).

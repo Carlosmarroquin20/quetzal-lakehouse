@@ -11,10 +11,11 @@ account.
 
 | Resource | Detail |
 |---|---|
-| Five S3 buckets | `<prefix>-bronze`, `-silver`, `-gold`, `-silver-dev` and `-gold-dev`, the same layout as the local stack. |
+| Six S3 buckets | `<prefix>-bronze`, `-silver`, `-gold`, `-silver-dev`, `-gold-dev` and `-backups`, the same layout as the local stack. |
 | On every bucket | Public access blocked, object ACLs disabled, encryption with keys managed by S3, requests without TLS refused, and unfinished multipart uploads removed after seven days. |
 | On bronze only | Versioning, with previous versions kept for 90 days. |
-| Five IAM roles | `ingestion`, `transform-prod`, `transform-dev`, `dashboard` and `notifications`, each with the same access as its local identity, to be assumed by ECS tasks. |
+| On backups only | The catalog dumps expire after 14 days. |
+| Six IAM roles | `ingestion`, `transform-prod`, `transform-dev`, `dashboard`, `notifications` and `backup`, each with the same access as its local identity, to be assumed by ECS tasks. |
 
 | Role | List and read | Write |
 |---|---|---|
@@ -23,6 +24,7 @@ account.
 | `transform-dev` | bronze, silver-dev, gold-dev | silver-dev, gold-dev |
 | `dashboard` | gold | nothing |
 | `notifications` | gold | nothing |
+| `backup` | backups | backups |
 
 ## The same code on both
 
@@ -53,7 +55,7 @@ Terraform runs in a container, so neither has to be installed.
    docker compose --profile aws run --rm terraform apply -var-file=emulator.tfvars
    ```
 
-   The apply creates 36 resources and prints the bucket and role names. The
+   The apply creates 43 resources and prints the bucket and role names. The
    emulator keeps everything in memory, so restarting it starts over (delete
    `infra/aws/terraform.tfstate` too).
 
@@ -99,6 +101,9 @@ What was checked on 2026-10-15, with the role credentials of each job:
 - The `notifications` role, added afterwards, was created with read access
   to gold only, and the emulator issued temporary credentials for it. The
   digest itself was not run against the emulator.
+- The `backups` bucket and the `backup` role, added later still, were
+  applied to the emulator, which kept the 14-day expiration rule. The backup
+  job itself was not run against it.
 
 The emulator does not enforce IAM policies, so it does not prove that each
 role is limited to its buckets; the same rules were checked against
@@ -117,7 +122,7 @@ them in a meaningful way:
   started by EventBridge Scheduler in the order the Airflow DAG uses, or by
   Amazon MWAA (managed Airflow) running the existing DAG with the ECS
   operator instead of the Docker one. MWAA keeps the DAG as it is but has a
-  fixed monthly cost; the scheduler is much cheaper for six tasks a day.
+  fixed monthly cost; the scheduler is much cheaper for nine tasks a day.
 - **The dashboard as an ECS service** behind a load balancer with
   authentication, since Streamlit has no login.
 - **The DuckLake catalog in Amazon RDS for PostgreSQL**, the smallest
