@@ -310,6 +310,28 @@ services:
       NOTIFICATIONS_WEBHOOK_SECRET: ${NOTIFICATIONS_WEBHOOK_SECRET:-}
     depends_on: *after-storage-init
 
+  backup:
+    # Dumps the prod DuckLake catalogs to the backups bucket and deletes the
+    # dumps older than BACKUP_KEEP_DAYS: `docker compose run --rm backup`.
+    # Airflow starts the same image every day.
+    build: ./backup
+    image: quetzal-lakehouse-backup
+    profiles: ["jobs"]
+    environment:
+      S3_ENDPOINT_URL: http://storage:8333
+      S3_REGION: ${S3_REGION:?set S3_REGION in .env}
+      S3_BUCKET_BACKUPS: ${S3_BUCKET_BACKUPS:?set S3_BUCKET_BACKUPS in .env}
+      # The backup role: it can write the backups bucket and nothing else, and
+      # read the prod catalogs and nothing else.
+      S3_ACCESS_KEY_ID: ${S3_BACKUP_ACCESS_KEY_ID:?set S3_BACKUP_ACCESS_KEY_ID in .env}
+      S3_SECRET_ACCESS_KEY: ${S3_BACKUP_SECRET_ACCESS_KEY:?set S3_BACKUP_SECRET_ACCESS_KEY in .env}
+      LAKE_CATALOG_HOST: catalog
+      LAKE_CATALOG_USER: lake_backup
+      LAKE_CATALOG_PASSWORD: ${LAKE_CATALOG_BACKUP_PASSWORD:?set LAKE_CATALOG_BACKUP_PASSWORD in .env}
+      BACKUP_CATALOGS: lake_silver,lake_gold
+      BACKUP_KEEP_DAYS: "14"
+    depends_on: *after-storage-init
+
   # A local emulator of the AWS APIs, to try the Terraform configuration in
   # infra/aws and the jobs against it without an AWS account. Start it with
   # `docker compose --profile aws up -d aws-emulator`; see docs/aws.md.
