@@ -96,7 +96,7 @@ services:
     # each version of each table. The data itself stays in the buckets. Like
     # the store, it runs without a profile, because every dbt run and every
     # reader of gold needs it.
-    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
+    image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     environment:
       POSTGRES_USER: ${LAKE_CATALOG_ADMIN_USER:?set LAKE_CATALOG_ADMIN_USER in .env}
       POSTGRES_PASSWORD: ${LAKE_CATALOG_ADMIN_PASSWORD:?set LAKE_CATALOG_ADMIN_PASSWORD in .env}
@@ -112,7 +112,7 @@ services:
     # Creates the catalogs and one login per role, each allowed only what its
     # role needs. Runs on every start and ends; applying it again changes
     # nothing, and keeps the passwords in step with .env.
-    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
+    image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     entrypoint: ["sh", "/init-catalog.sh"]
     environment:
       POSTGRES_USER: ${LAKE_CATALOG_ADMIN_USER:?set LAKE_CATALOG_ADMIN_USER in .env}
@@ -375,7 +375,7 @@ services:
   # the ingestion or transform image as a container, through the Docker
   # socket. Start it with `docker compose --profile airflow up -d`.
   airflow-db:
-    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
+    image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     profiles: ["airflow"]
     environment:
       POSTGRES_USER: ${AIRFLOW_DB_USER:?set AIRFLOW_DB_USER in .env}
@@ -469,7 +469,7 @@ services:
     # webhooks. Start it with `docker compose --profile notifications up -d`.
     # The tag is pinned because n8n releases often, and an upgrade can change
     # how stored workflows behave.
-    image: n8nio/n8n:2.44.2@sha256:b57e7a9c8e5ab1a8fe9b03fff3158052aec65f571ed1f759897a20f306ad329d
+    image: n8nio/n8n:2.44.3@sha256:5032941f437e1daa421cad0cc3ea57cd054f0d44a7256b38a0a3fca1b460834a
     profiles: ["notifications"]
     environment:
       # Encrypts the credentials n8n stores, such as the bot token. Given here
