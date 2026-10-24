@@ -85,6 +85,42 @@ services:
       retries: 5
       start_period: 15s
 
+  catalog:
+    # The DuckLake catalogs of silver and gold: which Parquet files make up
+    # each version of each table. The data itself stays in the buckets. Like
+    # the store, it runs without a profile, because every dbt run and every
+    # reader of gold needs it.
+    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
+    environment:
+      POSTGRES_USER: ${LAKE_CATALOG_ADMIN_USER:?set LAKE_CATALOG_ADMIN_USER in .env}
+      POSTGRES_PASSWORD: ${LAKE_CATALOG_ADMIN_PASSWORD:?set LAKE_CATALOG_ADMIN_PASSWORD in .env}
+    volumes:
+      - catalog-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${LAKE_CATALOG_ADMIN_USER}", "-d", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  catalog-init:
+    # Creates the catalogs and one login per role, each allowed only what its
+    # role needs. Runs on every start and ends; applying it again changes
+    # nothing, and keeps the passwords in step with .env.
+    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
+    entrypoint: ["sh", "/init-catalog.sh"]
+    environment:
+      POSTGRES_USER: ${LAKE_CATALOG_ADMIN_USER:?set LAKE_CATALOG_ADMIN_USER in .env}
+      POSTGRES_PASSWORD: ${LAKE_CATALOG_ADMIN_PASSWORD:?set LAKE_CATALOG_ADMIN_PASSWORD in .env}
+      LAKE_CATALOG_PROD_PASSWORD: ${LAKE_CATALOG_PROD_PASSWORD:?set LAKE_CATALOG_PROD_PASSWORD in .env}
+      LAKE_CATALOG_DEV_PASSWORD: ${LAKE_CATALOG_DEV_PASSWORD:?set LAKE_CATALOG_DEV_PASSWORD in .env}
+      LAKE_CATALOG_DASHBOARD_PASSWORD: ${LAKE_CATALOG_DASHBOARD_PASSWORD:?set LAKE_CATALOG_DASHBOARD_PASSWORD in .env}
+      LAKE_CATALOG_NOTIFICATIONS_PASSWORD: ${LAKE_CATALOG_NOTIFICATIONS_PASSWORD:?set LAKE_CATALOG_NOTIFICATIONS_PASSWORD in .env}
+    volumes:
+      - ./catalog/init-catalog.sh:/init-catalog.sh:ro
+    depends_on:
+      catalog:
+        condition: service_healthy
+
   storage-init:
     # Creates one identity per role, each allowed only what its role needs.
     # Runs on every start and ends; applying the same identities again
@@ -148,6 +184,8 @@ services:
       - ./landing:/landing:ro
     depends_on: &after-storage-init
       storage-init:
+        condition: service_completed_successfully
+      catalog-init:
         condition: service_completed_successfully
 
   transform:
@@ -427,6 +465,7 @@ services:
 
 volumes:
   storage-data:
+  catalog-data:
   transform-state:
   transform-state-dev:
   airflow-db-data:
