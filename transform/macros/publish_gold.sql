@@ -9,18 +9,23 @@
     staging when it starts. The Airflow DAG also runs it only after a build
     that passed. Either way, gold.main keeps the last version that passed.
 
+    Each table of gold.main is created from its model's contract, with the
+    declared types and not-null constraints, and then filled by column name.
+    A copy made with `create table ... as select` would keep the types but
+    drop the constraints, and gold.main is the table consumers read.
+
         dbt run-operation publish_gold
 #}
 {% macro publish_gold() %}
-    {%- set models = [] -%}
+    {%- set nodes = {} -%}
     {%- for node in graph.nodes.values()
             if node.resource_type == "model" and node.database == "gold" -%}
-        {%- do models.append(node.alias) -%}
+        {%- do nodes.update({node.alias: node}) -%}
     {%- endfor -%}
-    {%- if not models -%}
+    {%- if not nodes -%}
         {{ exceptions.raise_compiler_error("No gold models to publish.") }}
     {%- endif -%}
-    {%- set models = models | sort -%}
+    {%- set models = nodes.keys() | sort -%}
 
     {%- set staged = run_query(
         "select table_name from duckdb_tables()"
@@ -45,9 +50,22 @@
 
     {%- set statements = ["begin transaction", "create schema if not exists gold.main"] -%}
     {%- for model in models -%}
+        {%- set columns = [] -%}
+        {%- for column in nodes[model].columns.values() -%}
+            {%- set not_null = column.constraints
+                | selectattr("type", "equalto", "not_null") | list -%}
+            {%- do columns.append(
+                adapter.quote(column.name) ~ " " ~ column.data_type
+                ~ (" not null" if not_null else "")
+            ) -%}
+        {%- endfor -%}
         {%- do statements.append(
             "create or replace table gold.main." ~ model
-            ~ " as select * from gold.staging." ~ model
+            ~ " (" ~ columns | join(", ") ~ ")"
+        ) -%}
+        {%- do statements.append(
+            "insert into gold.main." ~ model
+            ~ " by name select * from gold.staging." ~ model
         ) -%}
     {%- endfor -%}
     {%- do statements.append("commit") -%}
