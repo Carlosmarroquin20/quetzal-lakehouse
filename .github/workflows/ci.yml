@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [ingestion, dashboard, notifications, orchestration]
+        project: [ingestion, dashboard, notifications, orchestration, backup]
     defaults:
       run:
         working-directory: ${{ matrix.project }}
@@ -125,7 +125,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [ingestion, transform, dashboard, notifications, orchestration]
+        project: [ingestion, transform, dashboard, notifications, orchestration, backup]
     defaults:
       run:
         working-directory: ${{ matrix.project }}
@@ -148,7 +148,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [ingestion, transform, dashboard, notifications]
+        image: [ingestion, transform, dashboard, notifications, backup]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build -t "quetzal-lakehouse-${{ matrix.image }}" "${{ matrix.image }}"
