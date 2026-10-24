@@ -1,0 +1,56 @@
+{#
+    Publishes gold: replaces every table of gold.main with its counterpart
+    in gold.staging, all in one DuckLake transaction. Readers of gold.main see
+    either the previous version of every table or the new version of every
+    table, never a mix.
+
+    It refuses unless the last build of gold.staging passed: the build
+    leaves a mark there only if every model and test passed, and empties
+    staging when it starts. The Airflow DAG also runs it only after a build
+    that passed. Either way, gold.main keeps the last version that passed.
+
+        dbt run-operation publish_gold
+#}
+{% macro publish_gold() %}
+    {%- set models = [] -%}
+    {%- for node in graph.nodes.values()
+            if node.resource_type == "model" and node.database == "gold" -%}
+        {%- do models.append(node.alias) -%}
+    {%- endfor -%}
+    {%- if not models -%}
+        {{ exceptions.raise_compiler_error("No gold models to publish.") }}
+    {%- endif -%}
+    {%- set models = models | sort -%}
+
+    {%- set staged = run_query(
+        "select table_name from duckdb_tables()"
+        ~ " where database_name = 'gold' and schema_name = 'staging'"
+    ).columns[0].values() -%}
+
+    {#- Refuse to publish data that failed a test. -#}
+    {%- if "_build_passed" not in staged -%}
+        {{ exceptions.raise_compiler_error(
+            "Not publishing: the last build of gold.staging did not pass."
+        ) }}
+    {%- endif -%}
+
+    {#- Refuse to publish a partial build: every model must be in staging. -#}
+    {%- set missing = models | reject("in", staged) | list -%}
+    {%- if missing -%}
+        {{ exceptions.raise_compiler_error(
+            "Not publishing: these gold models are missing from gold.staging: "
+            ~ missing | join(", ")
+        ) }}
+    {%- endif -%}
+
+    {%- set statements = ["begin transaction", "create schema if not exists gold.main"] -%}
+    {%- for model in models -%}
+        {%- do statements.append(
+            "create or replace table gold.main." ~ model
+            ~ " as select * from gold.staging." ~ model
+        ) -%}
+    {%- endfor -%}
+    {%- do statements.append("commit") -%}
+    {%- do run_query(statements | join(";\n")) -%}
+    {{ log("Published " ~ models | length ~ " gold tables: " ~ models | join(", "), info=True) }}
+{% endmacro %}

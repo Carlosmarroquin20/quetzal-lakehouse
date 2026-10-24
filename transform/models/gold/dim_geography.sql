@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/dim_geography/dim_geography.parquet"
-    )
-}}
-
 -- Where the money is spent: one row per municipality, with its department.
 -- Municipality codes are unique across departments. Besides real places, the
 -- budget uses a few codes for spending without a single location.

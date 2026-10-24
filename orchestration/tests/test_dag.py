@@ -28,6 +28,7 @@ SECRETS = {
     "S3_NOTIFICATIONS_ACCESS_KEY_ID": "test-notifications-key",
     "S3_NOTIFICATIONS_SECRET_ACCESS_KEY": "test-notifications-secret",
     "NOTIFICATIONS_WEBHOOK_SECRET": "test-webhook-secret",
+    "LAKE_CATALOG_PROD_PASSWORD": "test-catalog-password",
 }
 
 
@@ -60,12 +61,18 @@ def test_the_tasks_run_in_order(dag):
     }
     assert set(dag.task_ids) == ingestion | {
         "dbt_build",
+        "publish_gold",
+        "maintain_lake",
         "send_daily_digest",
         "check_source_freshness",
     }
     assert dag.get_task("dbt_build").upstream_task_ids == ingestion
+    # Gold is published only after a build that passed, and the digest and
+    # the catalog maintenance only after it is published.
+    assert dag.get_task("publish_gold").upstream_task_ids == {"dbt_build"}
+    assert dag.get_task("maintain_lake").upstream_task_ids == {"publish_gold"}
     assert dag.get_task("check_source_freshness").upstream_task_ids == ingestion
-    assert dag.get_task("send_daily_digest").upstream_task_ids == {"dbt_build"}
+    assert dag.get_task("send_daily_digest").upstream_task_ids == {"publish_gold"}
     for task_id in ingestion:
         assert dag.get_task(task_id).upstream_task_ids == set()
 
@@ -114,6 +121,7 @@ def test_secrets_never_go_through_the_rendered_environment(dag):
         SECRETS["S3_TRANSFORM_PROD_ACCESS_KEY_ID"],
         SECRETS["S3_TRANSFORM_PROD_SECRET_ACCESS_KEY"],
         SECRETS["PSEUDONYMIZATION_KEY_PROD"],
+        SECRETS["LAKE_CATALOG_PROD_PASSWORD"],
     }
 
 
@@ -150,4 +158,20 @@ def test_a_killed_task_removes_its_container_at_once(dag):
         task.on_kill()
     client.remove_container.assert_called_once_with("abc123", force=True)
     client.stop.assert_not_called()
+
+
+def test_every_dbt_task_reaches_the_prod_catalog(dag):
+    for task in dag.tasks:
+        if task.image != "quetzal-lakehouse-transform":
+            continue
+        assert task.environment["LAKE_CATALOG_HOST"] == "catalog", task.task_id
+        assert task.environment["LAKE_CATALOG_USER"] == "lake_prod", task.task_id
+        assert task.environment["LAKE_GOLD_CATALOG"] == "lake_gold", task.task_id
+
+
+def test_publish_and_maintenance_run_dbt_operations(dag):
+    assert dag.get_task("publish_gold").command == ["run-operation", "publish_gold"]
+    assert dag.get_task("maintain_lake").command == [
+        "run-operation", "maintain_lake", "--args", "{keep_days: 30}",
+    ]
 

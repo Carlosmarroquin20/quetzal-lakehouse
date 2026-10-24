@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_SILVER") ~ "/minfin/central_government_expenditure/central_government_expenditure.parquet"
-    )
-}}
-
 with source as (
 
     select * from {{ source('bronze_minfin', 'central_government_expenditure') }}

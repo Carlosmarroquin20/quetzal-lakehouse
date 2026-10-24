@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/dim_date/dim_date.parquet"
-    )
-}}
-
 -- The calendar does not depend on any fact table. It starts in the first year
 -- with data and always runs to the end of the current year, so every fact
 -- can find its date.

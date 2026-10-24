@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/fct_budget_execution/fct_budget_execution.parquet"
-    )
-}}
-
 -- One row per budget line and fiscal year, the grain of the source. The
 -- classifiers with a hierarchy or names of their own become dimensions. The
 -- three that are only a code and a name on each line (budget type, economic

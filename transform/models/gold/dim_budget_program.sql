@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/dim_budget_program/dim_budget_program.parquet"
-    )
-}}
-
 -- The programmatic structure of the budget: who executes the money and in
 -- which program, subprogram, project, activity and work. Codes below the
 -- entity are only unique within it, so the whole path is the key. Names come

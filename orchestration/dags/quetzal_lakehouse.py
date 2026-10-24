@@ -48,7 +48,17 @@ TRANSFORM_SECRETS = {
     "S3_ACCESS_KEY_ID": os.environ.get("S3_TRANSFORM_PROD_ACCESS_KEY_ID", ""),
     "S3_SECRET_ACCESS_KEY": os.environ.get("S3_TRANSFORM_PROD_SECRET_ACCESS_KEY", ""),
     "PSEUDONYMIZATION_KEY": os.environ.get("PSEUDONYMIZATION_KEY_PROD", ""),
+    "LAKE_CATALOG_PASSWORD": os.environ.get("LAKE_CATALOG_PROD_PASSWORD", ""),
 }
+# The prod DuckLake catalogs of silver and gold, for every dbt task.
+CATALOG = {
+    "LAKE_CATALOG_HOST": "catalog",
+    "LAKE_CATALOG_USER": "lake_prod",
+    "LAKE_SILVER_CATALOG": "lake_silver",
+    "LAKE_GOLD_CATALOG": "lake_gold",
+}
+# How many days of earlier table versions the catalogs keep.
+LAKE_KEEP_DAYS = 30
 # The digest reads prod gold with a key pair that can do nothing else, and
 # proves itself to n8n with the secret the webhooks check.
 NOTIFICATIONS_SECRETS = {
@@ -165,11 +175,14 @@ with DAG(
         ],
     )
 
+    # Builds silver, and gold in gold.staging, and runs every test. Fails if
+    # any model or test fails, and then nothing downstream runs.
     dbt_build = job(
         "dbt_build",
         TRANSFORM_IMAGE,
         ["build"],
         TRANSFORM_SECRETS,
+        environment=CATALOG,
         mounts=[
             Mount(
                 source="quetzal-lakehouse_transform-state",
@@ -189,8 +202,29 @@ with DAG(
         TRANSFORM_IMAGE,
         ["source", "freshness"],
         TRANSFORM_SECRETS,
-        environment={"DBT_DUCKDB_PATH": "/tmp/freshness.duckdb"},
+        environment={**CATALOG, "DBT_DUCKDB_PATH": "/tmp/freshness.duckdb"},
         retries=0,
+    )
+
+    # Write-audit-publish: only a build whose models and tests all passed
+    # reaches here, and every gold table readers see is replaced from
+    # gold.staging in one transaction.
+    publish_gold = job(
+        "publish_gold",
+        TRANSFORM_IMAGE,
+        ["run-operation", "publish_gold"],
+        TRANSFORM_SECRETS,
+        environment={**CATALOG, "DBT_DUCKDB_PATH": "/tmp/publish.duckdb"},
+    )
+
+    # Forgets table versions older than LAKE_KEEP_DAYS and deletes the files
+    # only they used, so the buckets do not grow without end.
+    maintain_lake = job(
+        "maintain_lake",
+        TRANSFORM_IMAGE,
+        ["run-operation", "maintain_lake", "--args", f"{{keep_days: {LAKE_KEEP_DAYS}}}"],
+        TRANSFORM_SECRETS,
+        environment={**CATALOG, "DBT_DUCKDB_PATH": "/tmp/maintain.duckdb"},
     )
 
     # The day the digest reports on is the day of the run in Guatemala,
@@ -206,5 +240,5 @@ with DAG(
     )
 
     ingestion = [exchange_rates, contracting_processes, budget_execution]
-    ingestion >> dbt_build >> daily_digest
+    ingestion >> dbt_build >> publish_gold >> [daily_digest, maintain_lake]
     ingestion >> source_freshness

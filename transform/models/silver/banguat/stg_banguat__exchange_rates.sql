@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_SILVER") ~ "/banguat/exchange_rates/exchange_rates.parquet"
-    )
-}}
-
 with source as (
 
     select * from {{ source('bronze_banguat', 'exchange_rates') }}

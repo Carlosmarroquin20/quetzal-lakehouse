@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/fct_awards/fct_awards.parquet"
-    )
-}}
-
 with awards as (
 
     select * from {{ ref('stg_guatecompras__awards') }}

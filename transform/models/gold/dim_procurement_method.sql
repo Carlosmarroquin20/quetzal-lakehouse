@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/dim_procurement_method/dim_procurement_method.parquet"
-    )
-}}
-
 with methods as (
 
     select distinct

@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/dim_expenditure_object/dim_expenditure_object.parquet"
-    )
-}}
-
 -- What the money is spent on, in the national object-of-expenditure
 -- classifier: one row per expenditure item, with the subgroup and group it
 -- belongs to. Names come from the most recent fiscal year.

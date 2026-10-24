@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/dim_supplier/dim_supplier.parquet"
-    )
-}}
-
 -- Gold is the layer others consume, so it does not identify natural persons.
 -- Their tax number and name are replaced; so are those of suppliers whose
 -- legal type is unknown, since they could be persons too. Companies and other

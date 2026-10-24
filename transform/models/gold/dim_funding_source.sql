@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/dim_funding_source/dim_funding_source.parquet"
-    )
-}}
-
 -- Where the money comes from: taxes, loans, donations and so on.
 
 select

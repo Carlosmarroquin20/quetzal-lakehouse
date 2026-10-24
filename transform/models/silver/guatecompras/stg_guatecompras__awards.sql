@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_SILVER") ~ "/guatecompras/awards/awards.parquet"
-    )
-}}
-
 with source as (
 
     select * from {{ source('bronze_guatecompras', 'contracting_processes') }}

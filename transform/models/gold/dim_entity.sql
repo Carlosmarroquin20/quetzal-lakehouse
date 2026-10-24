@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/dim_entity/dim_entity.parquet"
-    )
-}}
-
 -- Budget entities of the public sector, shared by the budget and procurement
 -- facts. The budget data gives official names, but only for the central
 -- government; every other entity is known only through the processes that

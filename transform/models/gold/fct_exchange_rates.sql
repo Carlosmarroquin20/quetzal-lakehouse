@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/fct_exchange_rates/fct_exchange_rates.parquet"
-    )
-}}
-
 with rates as (
 
     select * from {{ ref('stg_banguat__exchange_rates') }}

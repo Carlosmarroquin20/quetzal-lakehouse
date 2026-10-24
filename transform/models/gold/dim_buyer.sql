@@ -1,9 +1,3 @@
-{{
-    config(
-        location="s3://" ~ env_var("S3_BUCKET_GOLD") ~ "/dim_buyer/dim_buyer.parquet"
-    )
-}}
-
 with processes as (
 
     select * from {{ ref('stg_guatecompras__processes') }}

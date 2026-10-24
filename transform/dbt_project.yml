@@ -10,9 +10,23 @@ flags:
   # Do not report usage statistics to dbt Labs.
   send_anonymous_usage_stats: false
 
+# Each build starts from an empty gold.staging, and leaves a mark there only
+# if every model and test passed; publish_gold requires the mark.
+on-run-start:
+  - "{{ clear_gold_staging() }}"
+on-run-end:
+  - "{{ mark_build_passed(results) }}"
+
 models:
   quetzal_lakehouse:
-    # Every model is written as a Parquet file to the bucket of its layer.
-    # DuckDB only keeps a view over each file.
-    +materialized: external
-    +format: parquet
+    # Every model is a table of the DuckLake catalog of its layer, attached
+    # in profiles.yml. The data is Parquet in the layer's bucket.
+    +materialized: table
+    silver:
+      +database: silver
+    # Gold is built and tested in a staging schema. Readers see gold.main,
+    # which the publish_gold operation replaces in one transaction, and only
+    # once the whole build has passed.
+    gold:
+      +database: gold
+      +schema: staging

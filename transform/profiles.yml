@@ -18,12 +18,30 @@ quetzal_lakehouse:
         preserve_insertion_order: false
       extensions:
         - httpfs
-      # Plugins run on every connection: s3_access creates the secret that
-      # reaches the object store, from the environment; pseudonymization
-      # registers pseudonymize().
+      # Plugins run on every connection, before the attachments below:
+      # s3_access creates the secret that reaches the object store,
+      # catalog_access the one that logs in to the DuckLake catalog, both
+      # from the environment; pseudonymization registers pseudonymize().
       module_paths:
         - plugins
       plugins:
         - module: s3_access
+        - module: catalog_access
         - module: pseudonymization
+      # Silver and gold as DuckLake catalogs: tables with versions, written in
+      # transactions, whose Parquet files live in the bucket of each layer.
+      # The catalogs themselves are databases of the `catalog` Postgres.
+      # Without LAKE_CATALOG_HOST, as in CI, local throwaway catalogs under
+      # target/ stand in, so dbt can still parse and run unit tests.
+      attach:
+        - alias: silver
+          is_ducklake: true
+          path: "{{ 'ducklake:postgres:dbname=' ~ env_var('LAKE_SILVER_CATALOG', '') if env_var('LAKE_CATALOG_HOST', '') else 'ducklake:target/silver.ducklake' }}"
+          options:
+            data_path: "{{ 's3://' ~ env_var('S3_BUCKET_SILVER') ~ '/ducklake/' if env_var('LAKE_CATALOG_HOST', '') else 'target/lake/silver/' }}"
+        - alias: gold
+          is_ducklake: true
+          path: "{{ 'ducklake:postgres:dbname=' ~ env_var('LAKE_GOLD_CATALOG', '') if env_var('LAKE_CATALOG_HOST', '') else 'ducklake:target/gold.ducklake' }}"
+          options:
+            data_path: "{{ 's3://' ~ env_var('S3_BUCKET_GOLD') ~ '/ducklake/' if env_var('LAKE_CATALOG_HOST', '') else 'target/lake/gold/' }}"
     prod: *duckdb
