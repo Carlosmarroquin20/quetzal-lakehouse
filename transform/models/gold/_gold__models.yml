@@ -14,36 +14,51 @@ models:
             datepart: day
     columns:
       - name: date_key
+        data_type: integer
+        constraints:
+          - type: not_null
         description: Surrogate key, the date written as the integer YYYYMMDD.
         data_tests:
           - not_null
           - unique
       - name: date_day
+        data_type: date
+        constraints:
+          - type: not_null
         description: The calendar day.
         data_tests:
           - not_null
           - unique
       - name: year
+        data_type: integer
         description: Calendar year.
       - name: quarter
+        data_type: integer
         description: Quarter of the year, 1 to 4.
       - name: month
+        data_type: integer
         description: Month of the year, 1 to 12.
       - name: month_name
+        data_type: varchar
         description: Name of the month in English.
       - name: day_of_month
+        data_type: integer
         description: Day of the month, 1 to 31.
       - name: day_of_week
+        data_type: integer
         description: ISO day of the week, 1 (Monday) to 7 (Sunday).
         data_tests:
           - accepted_values:
               arguments:
                 values: [1, 2, 3, 4, 5, 6, 7]
       - name: day_name
+        data_type: varchar
         description: Name of the day in English.
       - name: is_weekend
+        data_type: boolean
         description: True on Saturdays and Sundays. Public holidays are not marked.
       - name: first_day_of_month
+        data_type: date
         description: First day of the month the day belongs to, for grouping by month.
 
   - name: dim_currency
@@ -51,16 +66,23 @@ models:
       Currency dimension, one row per currency known to the lakehouse.
     columns:
       - name: currency_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Surrogate key, a hash of the ISO 4217 code.
         data_tests:
           - not_null
           - unique
       - name: currency_code
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: ISO 4217 code. The natural key.
         data_tests:
           - not_null
           - unique
       - name: currency_name
+        data_type: varchar
         description: Name of the currency in English.
 
   - name: fct_exchange_rates
@@ -90,6 +112,9 @@ models:
             where: "is_published"
     columns:
       - name: date_key
+        data_type: integer
+        constraints:
+          - type: not_null
         description: Day the rate applies to. Foreign key to dim_date.
         data_tests:
           - not_null
@@ -98,6 +123,9 @@ models:
                 to: ref('dim_date')
                 field: date_key
       - name: currency_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Currency being priced. Foreign key to dim_currency.
         data_tests:
           - not_null
@@ -106,14 +134,23 @@ models:
                 to: ref('dim_currency')
                 field: currency_key
       - name: buy_rate
+        data_type: decimal(10,6)
+        constraints:
+          - type: not_null
         description: Buying rate, in quetzales per unit of the currency.
         data_tests:
           - not_null
       - name: sell_rate
+        data_type: decimal(10,6)
+        constraints:
+          - type: not_null
         description: Selling rate, in quetzales per unit of the currency.
         data_tests:
           - not_null
       - name: reference_rate
+        data_type: decimal(11,7)
+        constraints:
+          - type: not_null
         description: >
           Rate to use when converting amounts: the midpoint of the buying and
           selling rates, in quetzales per unit of the currency. Since
@@ -123,6 +160,9 @@ models:
         data_tests:
           - not_null
       - name: is_published
+        data_type: boolean
+        constraints:
+          - type: not_null
         description: >
           True when the source published a rate for the day. False on the
           days it skipped, whose rates are carried over from the last
@@ -130,6 +170,9 @@ models:
         data_tests:
           - not_null
       - name: rate_published_date
+        data_type: date
+        constraints:
+          - type: not_null
         description: >
           Day on which the rate in this row was published. Equal to the row's
           own day when is_published is true, and an earlier day otherwise.

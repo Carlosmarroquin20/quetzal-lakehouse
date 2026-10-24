@@ -10,25 +10,36 @@ models:
       that share one entity code.
     columns:
       - name: buyer_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Surrogate key, a hash of buyer_id.
         data_tests:
           - not_null
           - unique
       - name: buyer_id
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Tax number of the public body, prefixed with GT-NIT. The natural key.
         data_tests:
           - not_null
           - unique
       - name: buyer_name
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Name of the buyer.
         data_tests:
           - not_null
       - name: entity_code
+        data_type: varchar
         description: >
           Code of the budget entity the buyer belongs to, in the
           institutional classifier of the public sector. Empty for the
           buyers whose processes never list it.
       - name: entity_key
+        data_type: varchar
         description: >
           Budget entity the buyer belongs to. Foreign key to dim_entity, which
           is how procurement is compared with the budget. Empty when
@@ -39,8 +50,10 @@ models:
                 to: ref('dim_entity')
                 field: entity_key
       - name: entity_type
+        data_type: varchar
         description: Kind of public body the budget entity is, in Spanish.
       - name: entity_sector
+        data_type: varchar
         description: Sector the budget entity belongs to, in Spanish.
 
   - name: dim_supplier
@@ -60,6 +73,9 @@ models:
             expression: "not is_masked or (supplier_id is null and supplier_name in ('Natural person', 'Supplier of unknown legal type'))"
     columns:
       - name: supplier_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: >
           Surrogate key, a keyed hash (HMAC-SHA256) of the supplier's
           identifier. Without the key it cannot be computed from a tax
@@ -68,24 +84,34 @@ models:
           - not_null
           - unique
       - name: supplier_id
+        data_type: varchar
         description: >
           Tax number prefixed with GT-NIT, or a Guatecompras number prefixed
           with GT-GCID. Empty when the supplier is masked.
       - name: supplier_name
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: >
           Name of the supplier, or "Natural person" or "Supplier of unknown
           legal type" when it is masked.
         data_tests:
           - not_null
       - name: identifier_scheme
+        data_type: varchar
         description: Registry that issued the identifier.
       - name: legal_type
+        data_type: varchar
         description: Legal form of the supplier, in Spanish. Empty when the source does not give it.
       - name: is_natural_person
+        data_type: boolean
         description: >
           True when the legal form is "INDIVIDUAL". Empty, not false, when
           the legal form is unknown.
       - name: is_masked
+        data_type: boolean
+        constraints:
+          - type: not_null
         description: True when supplier_id and supplier_name are replaced.
         data_tests:
           - not_null
@@ -96,15 +122,22 @@ models:
       Guatemalan procurement law.
     columns:
       - name: procurement_method_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Surrogate key, a hash of the procedure and its OCDS method.
         data_tests:
           - not_null
           - unique
       - name: procurement_procedure
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Name of the procedure, in Spanish, with the article of the law that governs it.
         data_tests:
           - not_null
       - name: ocds_method
+        data_type: varchar
         description: Method the source assigns to the procedure in the OCDS code list.
 
   - name: fct_awards
@@ -122,19 +155,31 @@ models:
             compare_model: ref('stg_guatecompras__awards')
     columns:
       - name: award_id
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Identifier of the award in the source. One row per award.
         data_tests:
           - not_null
           - unique
       - name: ocid
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Open contracting identifier of the process the award belongs to.
         data_tests:
           - not_null
       - name: tender_id
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Identifier of the tender, built from its Guatecompras operation number (NOG).
         data_tests:
           - not_null
       - name: award_date_key
+        data_type: integer
+        constraints:
+          - type: not_null
         description: Day in Guatemala on which the award was made. Foreign key to dim_date.
         data_tests:
           - not_null
@@ -143,6 +188,9 @@ models:
                 to: ref('dim_date')
                 field: date_key
       - name: published_date_key
+        data_type: integer
+        constraints:
+          - type: not_null
         description: Day in Guatemala on which the tender was published. Foreign key to dim_date.
         data_tests:
           - not_null
@@ -151,6 +199,9 @@ models:
                 to: ref('dim_date')
                 field: date_key
       - name: buyer_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Public body that made the purchase. Foreign key to dim_buyer.
         data_tests:
           - not_null
@@ -159,6 +210,9 @@ models:
                 to: ref('dim_buyer')
                 field: buyer_key
       - name: supplier_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Supplier that received the award. Foreign key to dim_supplier.
         data_tests:
           - not_null
@@ -167,6 +221,9 @@ models:
                 to: ref('dim_supplier')
                 field: supplier_key
       - name: procurement_method_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Procedure under which the purchase was made. Foreign key to dim_procurement_method.
         data_tests:
           - not_null
@@ -175,6 +232,9 @@ models:
                 to: ref('dim_procurement_method')
                 field: procurement_method_key
       - name: currency_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Currency in which the award was made. Foreign key to dim_currency.
         data_tests:
           - not_null
@@ -183,16 +243,26 @@ models:
                 to: ref('dim_currency')
                 field: currency_key
       - name: procurement_category
+        data_type: varchar
         description: What was bought (goods, services or works). Empty on a small share of processes.
       - name: is_cancelled
+        data_type: boolean
+        constraints:
+          - type: not_null
         description: True when the award was cancelled after being made.
         data_tests:
           - not_null
       - name: awarded_amount
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: Amount awarded, in the currency of the award.
         data_tests:
           - not_null
       - name: awarded_amount_gtq
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: Amount awarded, in quetzales.
         data_tests:
           - not_null
@@ -200,6 +270,9 @@ models:
               arguments:
                 min_value: 0
       - name: awarded_amount_usd
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: >
           Amount awarded, in US dollars, converted with the reference rate of
           the day the award was made (fct_exchange_rates).

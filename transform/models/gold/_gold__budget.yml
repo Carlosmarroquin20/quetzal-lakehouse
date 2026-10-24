@@ -12,20 +12,32 @@ models:
       most of its processes.
     columns:
       - name: entity_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Surrogate key, a hash of entity_code.
         data_tests:
           - not_null
           - unique
       - name: entity_code
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Code of the entity in the institutional classifier. The natural key.
         data_tests:
           - not_null
           - unique
       - name: entity_name
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Name of the entity. Official when name_source is MINFIN.
         data_tests:
           - not_null
       - name: name_source
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Where the name comes from, MINFIN or Guatecompras.
         data_tests:
           - not_null
@@ -33,14 +45,22 @@ models:
               arguments:
                 values: ["MINFIN", "Guatecompras"]
       - name: entity_type
+        data_type: varchar
         description: Kind of public body, in Spanish, as Guatecompras reports it. Empty for entities that never buy through it.
       - name: entity_sector
+        data_type: varchar
         description: Sector, in Spanish, as Guatecompras reports it.
       - name: has_budget_data
+        data_type: boolean
+        constraints:
+          - type: not_null
         description: True when the entity appears in the budget execution data.
         data_tests:
           - not_null
       - name: has_procurement_data
+        data_type: boolean
+        constraints:
+          - type: not_null
         description: True when some process in Guatecompras names the entity.
         data_tests:
           - not_null
@@ -53,37 +73,55 @@ models:
       the key. Names are those of the most recent fiscal year.
     columns:
       - name: budget_program_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Surrogate key, a hash of the entity code and the six codes below it.
         data_tests:
           - not_null
           - unique
       - name: entity_code
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Entity the program belongs to.
         data_tests:
           - not_null
       - name: executing_unit_code
+        data_type: integer
         description: Executing unit inside the entity.
       - name: executing_unit_name
+        data_type: varchar
         description: Name of the executing unit.
       - name: program_code
+        data_type: integer
         description: Budget program.
       - name: program_name
+        data_type: varchar
         description: Name of the program.
       - name: subprogram_code
+        data_type: integer
         description: Subprogram inside the program.
       - name: subprogram_name
+        data_type: varchar
         description: Name of the subprogram.
       - name: project_code
+        data_type: integer
         description: Project inside the subprogram.
       - name: project_name
+        data_type: varchar
         description: Name of the project.
       - name: activity_code
+        data_type: integer
         description: Activity inside the project.
       - name: activity_name
+        data_type: varchar
         description: Name of the activity.
       - name: work_code
+        data_type: integer
         description: Public work, 0 when there is none.
       - name: work_name
+        data_type: varchar
         description: Name of the work.
 
   - name: dim_expenditure_object
@@ -93,40 +131,58 @@ models:
       and group.
     columns:
       - name: expenditure_object_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Surrogate key, a hash of the expenditure item code.
         data_tests:
           - not_null
           - unique
       - name: expenditure_item_code
+        data_type: integer
+        constraints:
+          - type: not_null
         description: Expenditure item code. The natural key.
         data_tests:
           - not_null
           - unique
       - name: expenditure_item_name
+        data_type: varchar
         description: Name of the expenditure item, in Spanish.
       - name: expenditure_subgroup_code
+        data_type: integer
         description: Subgroup the item belongs to.
       - name: expenditure_subgroup_name
+        data_type: varchar
         description: Name of the subgroup, in Spanish.
       - name: expenditure_group_code
+        data_type: integer
         description: Group the item belongs to, for example 0 for personnel services.
       - name: expenditure_group_name
+        data_type: varchar
         description: Name of the group, in Spanish.
 
   - name: dim_funding_source
     description: Where the money comes from (taxes, loans, donations...), one row per funding source.
     columns:
       - name: funding_source_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Surrogate key, a hash of the funding source code.
         data_tests:
           - not_null
           - unique
       - name: funding_source_code
+        data_type: integer
+        constraints:
+          - type: not_null
         description: Funding source code. The natural key.
         data_tests:
           - not_null
           - unique
       - name: funding_source_name
+        data_type: varchar
         description: Name of the funding source, in Spanish.
 
   - name: dim_geography
@@ -136,20 +192,29 @@ models:
       place.
     columns:
       - name: geography_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Surrogate key, a hash of the municipality code.
         data_tests:
           - not_null
           - unique
       - name: municipality_code
+        data_type: integer
+        constraints:
+          - type: not_null
         description: Municipality code, unique across departments. The natural key.
         data_tests:
           - not_null
           - unique
       - name: municipality_name
+        data_type: varchar
         description: Name of the municipality.
       - name: department_code
+        data_type: integer
         description: Department the municipality belongs to.
       - name: department_name
+        data_type: varchar
         description: Name of the department.
 
   - name: fct_budget_execution
@@ -167,10 +232,16 @@ models:
             compare_model: ref('stg_minfin__central_government_expenditure')
     columns:
       - name: fiscal_year
+        data_type: integer
+        constraints:
+          - type: not_null
         description: Fiscal year of the budget.
         data_tests:
           - not_null
       - name: entity_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Budget entity. Foreign key to dim_entity.
         data_tests:
           - not_null
@@ -179,6 +250,9 @@ models:
                 to: ref('dim_entity')
                 field: entity_key
       - name: budget_program_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Executing unit and program path. Foreign key to dim_budget_program.
         data_tests:
           - not_null
@@ -187,6 +261,9 @@ models:
                 to: ref('dim_budget_program')
                 field: budget_program_key
       - name: expenditure_object_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: What the money is spent on. Foreign key to dim_expenditure_object.
         data_tests:
           - not_null
@@ -195,6 +272,9 @@ models:
                 to: ref('dim_expenditure_object')
                 field: expenditure_object_key
       - name: funding_source_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Where the money comes from. Foreign key to dim_funding_source.
         data_tests:
           - not_null
@@ -203,6 +283,9 @@ models:
                 to: ref('dim_funding_source')
                 field: funding_source_key
       - name: geography_key
+        data_type: varchar
+        constraints:
+          - type: not_null
         description: Where the money is spent. Foreign key to dim_geography.
         data_tests:
           - not_null
@@ -211,44 +294,72 @@ models:
                 to: ref('dim_geography')
                 field: geography_key
       - name: budget_type_code
+        data_type: integer
         description: Budget type (operating, investment or debt). Degenerate attribute.
       - name: budget_type_name
+        data_type: varchar
         description: Name of the budget type, in Spanish.
       - name: economic_code
+        data_type: integer
         description: Economic classification of the expenditure. Degenerate attribute.
       - name: economic_name
+        data_type: varchar
         description: Name of the economic class, in Spanish.
       - name: organism_code
+        data_type: integer
         description: Lending or donor organism, 0 when there is none. Degenerate attribute.
       - name: organism_name
+        data_type: varchar
         description: Name of the organism.
       - name: correlative
+        data_type: integer
         description: Number that tells apart lines sharing every other code.
       - name: initial_budget
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: Budget approved for the year ("asignado").
         data_tests:
           - not_null
       - name: budget_changes
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: Net changes to the approved budget ("modificado"). Can be negative.
         data_tests:
           - not_null
       - name: current_budget
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: Approved budget plus changes ("vigente").
         data_tests:
           - not_null
       - name: pre_committed
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: Amount reserved for purchases being prepared ("precomprometido").
         data_tests:
           - not_null
       - name: committed
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: Amount committed through contracts or purchase orders ("comprometido").
         data_tests:
           - not_null
       - name: accrued
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: Amount accrued for goods and services received ("devengado"); the usual measure of what was spent.
         data_tests:
           - not_null
       - name: paid
+        data_type: decimal(18,2)
+        constraints:
+          - type: not_null
         description: Amount paid ("pagado").
         data_tests:
           - not_null

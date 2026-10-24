@@ -30,3 +30,9 @@ models:
     gold:
       +database: gold
       +schema: staging
+      # Gold is what the dashboard and the digest read, so its shape is a
+      # contract: a model fails before writing anything unless it returns
+      # exactly the columns and types its YAML declares. CI also fails when a
+      # change removes or retypes a column of the previous commit.
+      +contract:
+        enforced: true
