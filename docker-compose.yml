@@ -72,8 +72,8 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
       # Comma-separated list. Missing buckets are created on every start;
       # existing ones are left as they are. Bronze is shared; silver and gold
-      # have one bucket per environment.
-      S3_BUCKET: "${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env},${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env},${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env},${S3_BUCKET_SILVER_DEV:?set S3_BUCKET_SILVER_DEV in .env},${S3_BUCKET_GOLD_DEV:?set S3_BUCKET_GOLD_DEV in .env}"
+      # have one bucket per environment; backups hold the catalog dumps.
+      S3_BUCKET: "${S3_BUCKET_BRONZE:?set S3_BUCKET_BRONZE in .env},${S3_BUCKET_SILVER:?set S3_BUCKET_SILVER in .env},${S3_BUCKET_GOLD:?set S3_BUCKET_GOLD in .env},${S3_BUCKET_SILVER_DEV:?set S3_BUCKET_SILVER_DEV in .env},${S3_BUCKET_GOLD_DEV:?set S3_BUCKET_GOLD_DEV in .env},${S3_BUCKET_BACKUPS:?set S3_BUCKET_BACKUPS in .env}"
     ports:
       # Published on loopback only: reachable from this machine, not the LAN.
       - "127.0.0.1:8333:8333"
@@ -117,6 +117,7 @@ services:
       LAKE_CATALOG_DEV_PASSWORD: ${LAKE_CATALOG_DEV_PASSWORD:?set LAKE_CATALOG_DEV_PASSWORD in .env}
       LAKE_CATALOG_DASHBOARD_PASSWORD: ${LAKE_CATALOG_DASHBOARD_PASSWORD:?set LAKE_CATALOG_DASHBOARD_PASSWORD in .env}
       LAKE_CATALOG_NOTIFICATIONS_PASSWORD: ${LAKE_CATALOG_NOTIFICATIONS_PASSWORD:?set LAKE_CATALOG_NOTIFICATIONS_PASSWORD in .env}
+      LAKE_CATALOG_BACKUP_PASSWORD: ${LAKE_CATALOG_BACKUP_PASSWORD:?set LAKE_CATALOG_BACKUP_PASSWORD in .env}
     volumes:
       - ./catalog/init-catalog.sh:/init-catalog.sh:ro
     depends_on:
@@ -142,14 +143,16 @@ services:
         s3.configure -user=transform-dev -buckets=$$SILVER_DEV,$$GOLD_DEV -actions=Read,Write,List -apply
         s3.configure -user=dashboard -access_key=$$DASHBOARD_KEY -secret_key=$$DASHBOARD_SECRET -buckets=$$GOLD -actions=Read,List -apply
         s3.configure -user=notifications -access_key=$$NOTIFICATIONS_KEY -secret_key=$$NOTIFICATIONS_SECRET -buckets=$$GOLD -actions=Read,List -apply
+        s3.configure -user=backup -access_key=$$BACKUP_KEY -secret_key=$$BACKUP_SECRET -buckets=$$BACKUPS -actions=Read,Write,List -apply
         EOF
-        echo "identities applied: ingestion, transform-prod, transform-dev, dashboard, notifications"
+        echo "identities applied: ingestion, transform-prod, transform-dev, dashboard, notifications, backup"
     environment:
       BRONZE: ${S3_BUCKET_BRONZE}
       SILVER: ${S3_BUCKET_SILVER}
       GOLD: ${S3_BUCKET_GOLD}
       SILVER_DEV: ${S3_BUCKET_SILVER_DEV}
       GOLD_DEV: ${S3_BUCKET_GOLD_DEV}
+      BACKUPS: ${S3_BUCKET_BACKUPS}
       INGESTION_KEY: ${S3_INGESTION_ACCESS_KEY_ID:?set S3_INGESTION_ACCESS_KEY_ID in .env}
       INGESTION_SECRET: ${S3_INGESTION_SECRET_ACCESS_KEY:?set S3_INGESTION_SECRET_ACCESS_KEY in .env}
       PROD_KEY: ${S3_TRANSFORM_PROD_ACCESS_KEY_ID:?set S3_TRANSFORM_PROD_ACCESS_KEY_ID in .env}
@@ -160,6 +163,8 @@ services:
       DASHBOARD_SECRET: ${S3_DASHBOARD_SECRET_ACCESS_KEY:?set S3_DASHBOARD_SECRET_ACCESS_KEY in .env}
       NOTIFICATIONS_KEY: ${S3_NOTIFICATIONS_ACCESS_KEY_ID:?set S3_NOTIFICATIONS_ACCESS_KEY_ID in .env}
       NOTIFICATIONS_SECRET: ${S3_NOTIFICATIONS_SECRET_ACCESS_KEY:?set S3_NOTIFICATIONS_SECRET_ACCESS_KEY in .env}
+      BACKUP_KEY: ${S3_BACKUP_ACCESS_KEY_ID:?set S3_BACKUP_ACCESS_KEY_ID in .env}
+      BACKUP_SECRET: ${S3_BACKUP_SECRET_ACCESS_KEY:?set S3_BACKUP_SECRET_ACCESS_KEY in .env}
     depends_on:
       storage:
         condition: service_healthy

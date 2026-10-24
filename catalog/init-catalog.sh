@@ -6,8 +6,9 @@
 #
 # Each dbt environment owns the catalogs of its own layers and cannot connect
 # to the other's, as with the key pairs of the object store. The dashboard
-# and the digest can only read the prod gold catalog. The data the catalogs
-# describe stays in the silver and gold buckets.
+# and the digest can only read the prod gold catalog, and the backup job can
+# only read the prod catalogs. The data the catalogs describe stays in the
+# silver and gold buckets.
 set -eu
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
@@ -27,7 +28,8 @@ begin
             ('lake_prod', '$LAKE_CATALOG_PROD_PASSWORD'),
             ('lake_dev', '$LAKE_CATALOG_DEV_PASSWORD'),
             ('lake_dashboard', '$LAKE_CATALOG_DASHBOARD_PASSWORD'),
-            ('lake_notifications', '$LAKE_CATALOG_NOTIFICATIONS_PASSWORD')
+            ('lake_notifications', '$LAKE_CATALOG_NOTIFICATIONS_PASSWORD'),
+            ('lake_backup', '$LAKE_CATALOG_BACKUP_PASSWORD')
         ) as t(name, password)
     loop
         if not exists (select from pg_roles where rolname = login.name) then
@@ -61,4 +63,17 @@ alter default privileges for role lake_prod in schema public grant select on tab
 SQL
 done
 
-echo "catalog roles applied: lake_prod, lake_dev, lake_dashboard, lake_notifications"
+# The backup job: connect to the prod catalogs and read all of them, to dump
+# them. It cannot change anything, and cannot connect to the dev catalogs.
+for db in lake_silver lake_gold; do
+    run --dbname postgres -c "grant connect on database $db to lake_backup"
+    run --dbname "$db" <<SQL
+grant usage on schema public to lake_backup;
+grant select on all tables in schema public to lake_backup;
+grant select on all sequences in schema public to lake_backup;
+alter default privileges for role lake_prod in schema public grant select on tables to lake_backup;
+alter default privileges for role lake_prod in schema public grant select on sequences to lake_backup;
+SQL
+done
+
+echo "catalog roles applied: lake_prod, lake_dev, lake_dashboard, lake_notifications, lake_backup"
