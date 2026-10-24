@@ -16,7 +16,8 @@ from datetime import timedelta
 
 import pendulum
 from airflow.providers.docker.operators.docker import DockerOperator
-from airflow.sdk import DAG
+from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.sdk import DAG, TriggerRule
 from docker.types import Mount
 
 from failure_alerts import report_failure
@@ -113,11 +114,13 @@ def job(
     environment: dict[str, str] | None = None,
     skip_on_exit_code: int | None = None,
     retries: int | None = None,
+    trigger_rule: TriggerRule = TriggerRule.ALL_SUCCESS,
 ) -> JobOperator:
     # None keeps the retries of default_args.
     extra = {} if retries is None else {"retries": retries}
     return JobOperator(
         **extra,
+        trigger_rule=trigger_rule,
         task_id=task_id,
         image=image,
         command=command,
@@ -182,12 +185,19 @@ with DAG(
 
     # Builds silver, and gold in gold.staging, and runs every test. Fails if
     # any model or test fails, and then nothing downstream runs.
+    #
+    # It runs once the ingestion is over, whether or not it succeeded. Bronze
+    # is consistent month by month: a month or a source that could not be
+    # loaded keeps its previous version, so building on it is safe, and the
+    # other sources still reach gold. The failed ingestion raises its own
+    # alert, and the freshness check catches a source stuck for days.
     dbt_build = job(
         "dbt_build",
         TRANSFORM_IMAGE,
         ["build"],
         TRANSFORM_SECRETS,
         environment=CATALOG,
+        trigger_rule=TriggerRule.ALL_DONE,
         mounts=[
             Mount(
                 source="quetzal-lakehouse_transform-state",
@@ -209,7 +219,13 @@ with DAG(
         TRANSFORM_SECRETS,
         environment={**CATALOG, "DBT_DUCKDB_PATH": "/tmp/freshness.duckdb"},
         retries=0,
+        trigger_rule=TriggerRule.ALL_DONE,
     )
+
+    # Starts nothing. It succeeds only when every ingestion task did, so a
+    # run in which one failed is marked failed, even though the build and the
+    # publish went ahead with what bronze held.
+    ingestion_complete = EmptyOperator(task_id="ingestion_complete")
 
     # Write-audit-publish: only a build whose models and tests all passed
     # reaches here, and every gold table readers see is replaced from
@@ -247,3 +263,4 @@ with DAG(
     ingestion = [exchange_rates, contracting_processes, budget_execution]
     ingestion >> dbt_build >> publish_gold >> [daily_digest, maintain_lake]
     ingestion >> source_freshness
+    ingestion >> ingestion_complete

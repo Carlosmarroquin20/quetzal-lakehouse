@@ -33,6 +33,11 @@ SECRETS = {
 }
 
 
+def jobs(dag):
+    """The tasks that start a container; ingestion_complete starts nothing."""
+    return [task for task in dag.tasks if task.task_id != "ingestion_complete"]
+
+
 @pytest.fixture(scope="module")
 def dag():
     with pytest.MonkeyPatch.context() as env:
@@ -66,6 +71,7 @@ def test_the_tasks_run_in_order(dag):
         "maintain_lake",
         "send_daily_digest",
         "check_source_freshness",
+        "ingestion_complete",
     }
     assert dag.get_task("dbt_build").upstream_task_ids == ingestion
     # Gold is published only after a build that passed, and the digest and
@@ -88,7 +94,7 @@ def test_it_runs_once_a_day_without_catching_up(dag):
 def test_every_task_retries_and_reports_its_final_failure(dag):
     from failure_alerts import report_failure
 
-    for task in dag.tasks:
+    for task in jobs(dag):
         if task.task_id == "check_source_freshness":
             # A stale source is not fixed by trying again.
             assert task.retries == 0
@@ -101,7 +107,7 @@ def test_every_task_retries_and_reports_its_final_failure(dag):
 
 
 def test_tasks_reach_docker_only_through_the_proxy(dag):
-    for task in dag.tasks:
+    for task in jobs(dag):
         assert isinstance(task, DockerOperator), task.task_id
         assert type(task).__name__ == "JobOperator", task.task_id
         assert task.docker_url == "tcp://docker-proxy:2375", task.task_id
@@ -113,7 +119,7 @@ def test_tasks_reach_docker_only_through_the_proxy(dag):
 
 def test_secrets_never_go_through_the_rendered_environment(dag):
     # environment is shown in the Airflow interface; private_environment is not.
-    for task in dag.tasks:
+    for task in jobs(dag):
         shown = " ".join(str(value) for value in task.environment.values())
         for secret in SECRETS.values():
             assert secret not in shown, task.task_id
@@ -162,7 +168,7 @@ def test_a_killed_task_removes_its_container_at_once(dag):
 
 
 def test_every_dbt_task_reaches_the_prod_catalog(dag):
-    for task in dag.tasks:
+    for task in jobs(dag):
         if task.image != "quetzal-lakehouse-transform":
             continue
         assert task.environment["LAKE_CATALOG_HOST"] == "catalog", task.task_id
@@ -184,4 +190,26 @@ def test_the_digest_reads_gold_with_its_own_catalog_login(dag):
     assert digest._private_environment["LAKE_CATALOG_PASSWORD"] == (
         SECRETS["LAKE_CATALOG_NOTIFICATIONS_PASSWORD"]
     )
+
+
+def test_the_build_goes_ahead_when_an_ingestion_fails(dag):
+    # Bronze keeps the last good version of anything that could not be
+    # loaded, so the build runs on it and the other sources still reach gold.
+    assert dag.get_task("dbt_build").trigger_rule == "all_done"
+    assert dag.get_task("check_source_freshness").trigger_rule == "all_done"
+    assert dag.get_task("publish_gold").trigger_rule == "all_success"
+
+
+def test_a_failed_ingestion_still_fails_the_run(dag):
+    # Airflow judges a run by its last tasks; this one succeeds only when
+    # every ingestion task did, and has nothing after it.
+    complete = dag.get_task("ingestion_complete")
+    assert type(complete).__name__ == "EmptyOperator"
+    assert complete.trigger_rule == "all_success"
+    assert complete.upstream_task_ids == {
+        "ingest_exchange_rates",
+        "ingest_contracting_processes",
+        "ingest_budget_execution",
+    }
+    assert complete.downstream_task_ids == set()
 
