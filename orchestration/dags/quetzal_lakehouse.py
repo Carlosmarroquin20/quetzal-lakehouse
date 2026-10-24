@@ -26,6 +26,7 @@ NETWORK = "quetzal-lakehouse_default"
 INGESTION_IMAGE = "quetzal-lakehouse-ingestion"
 TRANSFORM_IMAGE = "quetzal-lakehouse-transform"
 NOTIFICATIONS_IMAGE = "quetzal-lakehouse-notifications"
+BACKUP_IMAGE = "quetzal-lakehouse-backup"
 
 # Configuration the containers need. Airflow runs the prod environment.
 STORAGE = {
@@ -60,6 +61,23 @@ CATALOG = {
 }
 # How many days of earlier table versions the catalogs keep.
 LAKE_KEEP_DAYS = 30
+# How many days of catalog dumps the backups bucket keeps. It must stay below
+# LAKE_KEEP_DAYS: a dump points at files, and older versions' files are gone.
+BACKUP_KEEP_DAYS = 14
+# The backup job writes the backups bucket and reads the prod catalogs, with
+# a key pair and a login that can do nothing else.
+BACKUP_SECRETS = {
+    "S3_ACCESS_KEY_ID": os.environ.get("S3_BACKUP_ACCESS_KEY_ID", ""),
+    "S3_SECRET_ACCESS_KEY": os.environ.get("S3_BACKUP_SECRET_ACCESS_KEY", ""),
+    "LAKE_CATALOG_PASSWORD": os.environ.get("LAKE_CATALOG_BACKUP_PASSWORD", ""),
+}
+BACKUP = {
+    "S3_BUCKET_BACKUPS": os.environ.get("S3_BUCKET_BACKUPS", ""),
+    "LAKE_CATALOG_HOST": "catalog",
+    "LAKE_CATALOG_USER": "lake_backup",
+    "BACKUP_CATALOGS": "lake_silver,lake_gold",
+    "BACKUP_KEEP_DAYS": str(BACKUP_KEEP_DAYS),
+}
 # The digest reads prod gold with a key pair that can do nothing else, and
 # proves itself to n8n with the secret the webhooks check.
 NOTIFICATIONS_SECRETS = {
@@ -248,6 +266,17 @@ with DAG(
         environment={**CATALOG, "DBT_DUCKDB_PATH": "/tmp/maintain.duckdb"},
     )
 
+    # Dumps the prod catalogs once they hold the day's published version and
+    # the expired versions are gone, then deletes dumps older than
+    # BACKUP_KEEP_DAYS.
+    backup_catalog = job(
+        "backup_catalog",
+        BACKUP_IMAGE,
+        [],
+        BACKUP_SECRETS,
+        environment=BACKUP,
+    )
+
     # The day the digest reports on is the day of the run in Guatemala,
     # which the job works out itself; the run ID lets a message be traced
     # back to its run.
@@ -262,5 +291,6 @@ with DAG(
 
     ingestion = [exchange_rates, contracting_processes, budget_execution]
     ingestion >> dbt_build >> publish_gold >> [daily_digest, maintain_lake]
+    maintain_lake >> backup_catalog
     ingestion >> source_freshness
     ingestion >> ingestion_complete

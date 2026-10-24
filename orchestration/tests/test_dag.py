@@ -30,6 +30,9 @@ SECRETS = {
     "NOTIFICATIONS_WEBHOOK_SECRET": "test-webhook-secret",
     "LAKE_CATALOG_PROD_PASSWORD": "test-catalog-password",
     "LAKE_CATALOG_NOTIFICATIONS_PASSWORD": "test-digest-catalog-password",
+    "S3_BACKUP_ACCESS_KEY_ID": "test-backup-key",
+    "S3_BACKUP_SECRET_ACCESS_KEY": "test-backup-secret",
+    "LAKE_CATALOG_BACKUP_PASSWORD": "test-backup-catalog-password",
 }
 
 
@@ -72,6 +75,7 @@ def test_the_tasks_run_in_order(dag):
         "send_daily_digest",
         "check_source_freshness",
         "ingestion_complete",
+        "backup_catalog",
     }
     assert dag.get_task("dbt_build").upstream_task_ids == ingestion
     # Gold is published only after a build that passed, and the digest and
@@ -212,4 +216,24 @@ def test_a_failed_ingestion_still_fails_the_run(dag):
         "ingest_budget_execution",
     }
     assert complete.downstream_task_ids == set()
+
+
+def test_the_catalogs_are_backed_up_after_maintenance(dag):
+    backup = dag.get_task("backup_catalog")
+    assert backup.upstream_task_ids == {"maintain_lake"}
+    assert backup.image == "quetzal-lakehouse-backup"
+    assert backup.environment["LAKE_CATALOG_USER"] == "lake_backup"
+    assert backup.environment["BACKUP_CATALOGS"] == "lake_silver,lake_gold"
+    assert set(backup._private_environment.values()) == {
+        SECRETS["S3_BACKUP_ACCESS_KEY_ID"],
+        SECRETS["S3_BACKUP_SECRET_ACCESS_KEY"],
+        SECRETS["LAKE_CATALOG_BACKUP_PASSWORD"],
+    }
+
+
+def test_backups_are_kept_for_less_time_than_lake_versions(dag):
+    # A dump points at files; maintain_lake deletes those of older versions.
+    keep_backups = int(dag.get_task("backup_catalog").environment["BACKUP_KEEP_DAYS"])
+    keep_versions = int(dag.get_task("maintain_lake").command[-1].split(":")[1].strip(" }"))
+    assert keep_backups < keep_versions
 
