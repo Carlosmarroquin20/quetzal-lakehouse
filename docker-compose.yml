@@ -66,7 +66,7 @@ services:
     # by S3 itself with no code changes.
     # The tag is pinned because the image's all-in-one defaults (ports,
     # bundled components) may change between releases.
-    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    image: chrislusf/seaweedfs:4.50@sha256:c2658820e763294a9e9de7b36c81e59b879e3459148351aee4e31a126ca64860
     environment:
       # The administrator key pair. Jobs do not use it: each role has its
       # own key pair, created by storage-init. Mapped from project-specific
@@ -96,7 +96,7 @@ services:
     # each version of each table. The data itself stays in the buckets. Like
     # the store, it runs without a profile, because every dbt run and every
     # reader of gold needs it.
-    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
+    image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     environment:
       POSTGRES_USER: ${LAKE_CATALOG_ADMIN_USER:?set LAKE_CATALOG_ADMIN_USER in .env}
       POSTGRES_PASSWORD: ${LAKE_CATALOG_ADMIN_PASSWORD:?set LAKE_CATALOG_ADMIN_PASSWORD in .env}
@@ -112,7 +112,7 @@ services:
     # Creates the catalogs and one login per role, each allowed only what its
     # role needs. Runs on every start and ends; applying it again changes
     # nothing, and keeps the passwords in step with .env.
-    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
+    image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     entrypoint: ["sh", "/init-catalog.sh"]
     environment:
       POSTGRES_USER: ${LAKE_CATALOG_ADMIN_USER:?set LAKE_CATALOG_ADMIN_USER in .env}
@@ -132,7 +132,7 @@ services:
     # Creates one identity per role, each allowed only what its role needs.
     # Runs on every start and ends; applying the same identities again
     # changes nothing.
-    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    image: chrislusf/seaweedfs:4.50@sha256:c2658820e763294a9e9de7b36c81e59b879e3459148351aee4e31a126ca64860
     entrypoint: ["sh", "-c"]
     command:
       - |
@@ -340,7 +340,7 @@ services:
   # infra/aws and the jobs against it without an AWS account. Start it with
   # `docker compose --profile aws up -d aws-emulator`; see docs/aws.md.
   aws-emulator:
-    image: motoserver/moto:5.2.4@sha256:120b1589c6df7e35d2092935f6ff724486bb2c4189d0e36ce795baba1400ffd2
+    image: motoserver/moto:5.2.5@sha256:59a1965d845249b04def37a0e2565f9cc6c44543cb89b68e90f28f344b3b0d1a
     profiles: ["aws"]
     networks:
       default:
@@ -357,7 +357,7 @@ services:
     # Terraform without installing it: `docker compose --profile aws run
     # --rm terraform <command>`. It talks to the emulator, with the dummy
     # credentials the emulator accepts; nothing reaches AWS.
-    image: hashicorp/terraform:1.16.6@sha256:bfffc1ded5fbf0a17beaaf22eb4793980abdb19d0761ff6a3a0efb2ab4d9b316
+    image: hashicorp/terraform:1.17.1@sha256:a5d5a5a892c98f60fcbfa81eac2a40fc19e7b3fa7719bccae10ff6111d22524a
     profiles: ["aws"]
     working_dir: /infra
     environment:
@@ -375,7 +375,7 @@ services:
   # the ingestion or transform image as a container, through the Docker
   # socket. Start it with `docker compose --profile airflow up -d`.
   airflow-db:
-    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
+    image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     profiles: ["airflow"]
     environment:
       POSTGRES_USER: ${AIRFLOW_DB_USER:?set AIRFLOW_DB_USER in .env}
@@ -469,7 +469,7 @@ services:
     # webhooks. Start it with `docker compose --profile notifications up -d`.
     # The tag is pinned because n8n releases often, and an upgrade can change
     # how stored workflows behave.
-    image: n8nio/n8n:2.44.2@sha256:b57e7a9c8e5ab1a8fe9b03fff3158052aec65f571ed1f759897a20f306ad329d
+    image: n8nio/n8n:2.46.2@sha256:7835b0b05cb0a13133c7b9751c203b5b5d206ce3eb1b5f7fc0e5b01e8c6acdde
     profiles: ["notifications"]
     environment:
       # Encrypts the credentials n8n stores, such as the bot token. Given here
