@@ -1,7 +1,7 @@
 # Images are pinned by tag and digest. A tag can be moved to point at a
 # different image; the digest cannot, so a build always starts from the
 # image that was reviewed. Dependabot updates both together.
-FROM python:3.13-slim@sha256:57b29a7c050c4e679e4bea572e14b3965cf4b5839de2da49d55e49ffc4024f39
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 # uv installs exactly what uv.lock lists. Its version is pinned so the image
 # builds the same way every time.
